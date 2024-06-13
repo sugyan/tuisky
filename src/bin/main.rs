@@ -1,10 +1,11 @@
-use std::io::Result;
+use color_eyre::Result;
 use tuisky::app::App;
-use tuisky::tui;
+use tuisky::{errors, tui};
 
 fn main() -> Result<()> {
+    errors::install_hooks()?;
     let mut terminal = tui::init()?;
-    let app_result = App::default().run(&mut terminal);
+    App::default().run(&mut terminal)?;
     tui::restore()?;
-    app_result
+    Ok(())
 }
