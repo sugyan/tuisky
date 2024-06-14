@@ -1,3 +1,4 @@
+use crate::event::EventHandler;
 use color_eyre::eyre::Result;
 use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -22,9 +23,16 @@ impl<B> Tui<B>
 where
     B: Backend,
 {
-    /// Constructs a new instance of [`Tui`].
     pub fn new(terminal: Terminal<B>) -> Self {
         Self { terminal }
+    }
+    pub fn start(&mut self) -> Result<EventHandler> {
+        init()?;
+        Ok(EventHandler::new())
+    }
+    pub fn end(&mut self) -> Result<()> {
+        restore()?;
+        Ok(())
     }
 }
 
@@ -49,14 +57,14 @@ where
 }
 
 /// Initialize the terminal
-pub fn init() -> Result<()> {
+fn init() -> Result<()> {
     execute!(io(), EnterAlternateScreen)?;
     enable_raw_mode()?;
     Ok(())
 }
 
 /// Restore the terminal to its original state
-pub fn restore() -> Result<()> {
+pub(crate) fn restore() -> Result<()> {
     execute!(io(), LeaveAlternateScreen)?;
     disable_raw_mode()?;
     Ok(())

@@ -2,11 +2,12 @@ use color_eyre::Result;
 use tuisky::app::App;
 use tuisky::utils::initialize_panic_handler;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     initialize_panic_handler()?;
 
     let mut app = App::new();
-    app.run()?;
+    app.run().await?;
 
     Ok(())
 }
