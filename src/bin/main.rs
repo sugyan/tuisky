@@ -1,11 +1,12 @@
 use color_eyre::Result;
 use tuisky::app::App;
-use tuisky::{errors, tui};
+use tuisky::utils::initialize_panic_handler;
 
 fn main() -> Result<()> {
-    errors::install_hooks()?;
-    let mut terminal = tui::init()?;
-    App::default().run(&mut terminal)?;
-    tui::restore()?;
+    initialize_panic_handler()?;
+
+    let mut app = App::new();
+    app.run()?;
+
     Ok(())
 }

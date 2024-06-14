@@ -1,11 +1,12 @@
+use crate::tui::{self, io, Tui};
+use color_eyre::eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, List, ListState, Paragraph, StatefulWidget, Widget};
+use ratatui::Terminal;
 use ratatui::{buffer::Buffer, Frame};
-use std::io::Result;
-
-use crate::tui::Tui;
 
 #[derive(Debug, Default)]
 pub struct App {
@@ -20,11 +21,19 @@ struct StatefulList {
 }
 
 impl App {
-    pub fn run(&mut self, terminal: &mut Tui) -> Result<()> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn run(&mut self) -> Result<()> {
+        let terminal = Terminal::new(CrosstermBackend::new(io()))?;
+        let mut tui = Tui::new(terminal);
+
+        tui::init()?;
         while !self.exit {
-            terminal.draw(|frame| self.render_frame(frame))?;
+            tui.draw(|frame| self.render_frame(frame))?;
             self.handle_events()?;
         }
+        tui::restore()?;
         Ok(())
     }
     fn render_frame(&mut self, frame: &mut Frame) {
