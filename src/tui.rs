@@ -1,5 +1,5 @@
 use crate::types::Event;
-use color_eyre::eyre::Result;
+use color_eyre::Result;
 use crossterm::event::{Event as CrosstermEvent, EventStream};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
@@ -41,18 +41,21 @@ where
             event_rx,
         }
     }
-    pub fn start(&mut self) -> Result<()> {
+    pub fn start(&mut self, frame_rate: f64) -> Result<()> {
         init()?;
         let event_tx = self.event_tx.clone();
         self.task = Some(tokio::spawn(async move {
             let mut reader = EventStream::new();
-            let mut tick = time::interval(Duration::from_secs(1));
+            let mut tick_interval = time::interval(Duration::from_secs(1));
+            let mut render_interval = time::interval(Duration::from_secs_f64(1.0 / frame_rate));
             loop {
                 let event = reader.next().fuse();
-                let tick = tick.tick();
+                let tick_tick = tick_interval.tick();
+                let tick_render = render_interval.tick();
                 tokio::select! {
                     e = event => Self::handle_crossterm_event(e, &event_tx),
-                    _ = tick => event_tx.send(Event::Tick).unwrap(),
+                    _ = tick_tick => event_tx.send(Event::Tick).unwrap(),
+                    _ = tick_render => event_tx.send(Event::Render).unwrap(),
                 }
             }
         }));
