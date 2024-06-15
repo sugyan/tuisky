@@ -1,6 +1,5 @@
-use crate::action::Action;
-use crate::event::Event;
 use crate::tui::{io, Tui};
+use crate::types::{Action, Event};
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use ratatui::backend::CrosstermBackend;
@@ -19,10 +18,10 @@ impl App {
 
         let terminal = Terminal::new(CrosstermBackend::new(io()))?;
         let mut tui = Tui::new(terminal);
-        let mut events = tui.start()?;
+        tui.start()?;
         let mut should_quit = false;
         loop {
-            if let Some(e) = events.next().await {
+            if let Some(e) = tui.next_event().await {
                 match e {
                     Event::Tick => action_tx.send(Action::Tick)?,
                     Event::Key(key_event) => match key_event.code {

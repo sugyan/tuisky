@@ -1,5 +1,5 @@
 mod action;
 pub mod app;
-mod event;
 mod tui;
+mod types;
 pub mod utils;
