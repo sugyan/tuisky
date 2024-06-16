@@ -1,7 +1,8 @@
-use crossterm::event::{Event as CrosstermEvent, KeyEvent, MouseEvent};
+use crossterm::event::{KeyEvent, MouseEvent};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Action {
+    Error(String),
     Quit,
     Tick,
     Render,
@@ -15,6 +16,5 @@ pub enum Event {
     Render,
     Key(KeyEvent),
     Mouse(MouseEvent),
-    Focus(CrosstermEvent),
     Error(String),
 }

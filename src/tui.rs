@@ -74,9 +74,6 @@ where
     ) {
         match event {
             Some(Ok(event)) => match event {
-                CrosstermEvent::FocusGained | CrosstermEvent::FocusLost => {
-                    tx.send(Event::Focus(event)).unwrap();
-                }
                 CrosstermEvent::Mouse(mouse) => {
                     tx.send(Event::Mouse(mouse)).unwrap();
                 }
