@@ -1,3 +1,4 @@
+use crate::components::log::LogComponent;
 use crate::components::main::MainComponent;
 use crate::components::Component;
 use crate::tui::{io, Tui};
@@ -5,6 +6,7 @@ use crate::types::{Action, Event};
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::CrosstermBackend;
+use ratatui::layout::{Constraint, Layout};
 use ratatui::Terminal;
 use tokio::sync::mpsc;
 
@@ -18,7 +20,7 @@ impl App {
         log::debug!("App::new with frame_rate: {frame_rate}");
         Self {
             frame_rate,
-            components: vec![Box::new(MainComponent {})],
+            components: vec![Box::new(MainComponent::new())],
         }
     }
     pub async fn run(&mut self) -> Result<()> {
@@ -57,8 +59,19 @@ impl App {
                     Action::Tick => {}
                     Action::Render => {
                         tui.draw(|f| {
+                            // split horizontally, the right side is for log view
+                            let layout = Layout::default()
+                                .direction(ratatui::layout::Direction::Horizontal)
+                                .constraints([Constraint::Fill(1), Constraint::Max(60)])
+                                .split(f.size());
+                            if let Err(e) = LogComponent.draw(f, layout[1]) {
+                                action_tx
+                                    .send(Action::Error(format!("failed to draw: {e:?}")))
+                                    .expect("failed to send error");
+                            }
+                            // render components to the left side
                             for component in self.components.iter_mut() {
-                                if let Err(e) = component.draw(f, f.size()) {
+                                if let Err(e) = component.draw(f, layout[0]) {
                                     action_tx
                                         .send(Action::Error(format!("failed to draw: {e:?}")))
                                         .expect("failed to send error");
@@ -86,7 +99,6 @@ impl App {
             Event::Tick => return Some(Action::Tick),
             Event::Render => return Some(Action::Render),
             Event::Key(key_event) => {
-                log::debug!("Key {:?}", (key_event.code, key_event.modifiers));
                 if let Some(action) = self.handle_key_events(key_event) {
                     return Some(action);
                 }
@@ -96,11 +108,10 @@ impl App {
         None
     }
     fn handle_key_events(&mut self, key_event: KeyEvent) -> Option<Action> {
-        match (key_event.code, key_event.modifiers) {
-            (KeyCode::Char('c'), KeyModifiers::CONTROL) => return Some(Action::Quit),
-            (KeyCode::Char('n'), KeyModifiers::CONTROL) => return Some(Action::NextItem),
-            (KeyCode::Char('p'), KeyModifiers::CONTROL) => return Some(Action::PrevItem),
-            _ => {}
+        if matches!(key_event.code, KeyCode::Char('c' | 'q'))
+            && key_event.modifiers == KeyModifiers::CONTROL
+        {
+            return Some(Action::Quit);
         }
         None
     }

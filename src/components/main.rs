@@ -1,27 +1,46 @@
+use super::views::{feed::FeedView, View};
 use super::Component;
+use crate::types::Action;
 use color_eyre::Result;
-use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Style};
-use ratatui::widgets::Block;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::layout::Rect;
 use ratatui::Frame;
-use tui_logger::TuiLoggerWidget;
 
-pub struct MainComponent {}
+pub struct MainComponent {
+    views: Vec<View>,
+}
+
+impl MainComponent {
+    pub fn new() -> Self {
+        Self {
+            views: vec![View::Feed(FeedView::new())],
+        }
+    }
+}
 
 impl Component for MainComponent {
+    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
+        match (key.code, key.modifiers) {
+            (KeyCode::Char('n'), KeyModifiers::CONTROL) => return Ok(Some(Action::NextItem)),
+            (KeyCode::Char('p'), KeyModifiers::CONTROL) => return Ok(Some(Action::PrevItem)),
+            (KeyCode::Down, KeyModifiers::NONE) => return Ok(Some(Action::NextItem)),
+            (KeyCode::Up, KeyModifiers::NONE) => return Ok(Some(Action::PrevItem)),
+            _ => {}
+        }
+        Ok(None)
+    }
+    fn update(&mut self, action: Action) -> Result<Option<Action>> {
+        if let Some(top) = self.views.last_mut() {
+            if matches!(action, Action::NextItem | Action::PrevItem) {
+                return top.update(action);
+            }
+        }
+        Ok(None)
+    }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        let layout = Layout::default()
-            .direction(ratatui::layout::Direction::Horizontal)
-            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-            .split(f.size());
-        f.render_widget(
-            TuiLoggerWidget::default()
-                .block(Block::bordered().title("log"))
-                .style_error(Style::default().fg(Color::Red))
-                .style_warn(Style::default().fg(Color::Yellow))
-                .style_info(Style::default().fg(Color::Green)),
-            layout[1],
-        );
+        if let Some(top) = self.views.last_mut() {
+            top.draw(f, area)?;
+        }
         Ok(())
     }
 }

@@ -1,4 +1,6 @@
+pub mod log;
 pub mod main;
+mod views;
 
 use crate::types::{Action, Event};
 use color_eyre::eyre::Result;
@@ -45,6 +47,7 @@ pub trait Component {
     /// # Returns
     ///
     /// * `Result<()>` - An Ok result or an error.
+    #[allow(unused_variables)]
     fn init(&mut self, area: Rect) -> Result<()> {
         Ok(())
     }
