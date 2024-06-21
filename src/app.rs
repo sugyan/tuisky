@@ -17,13 +17,14 @@ pub struct App {
 
 impl App {
     pub fn new(frame_rate: f64) -> Self {
-        log::debug!("App::new with frame_rate: {frame_rate}");
+        log::debug!("App::new(frame_rate: {frame_rate})");
         Self {
             frame_rate,
-            components: vec![Box::new(MainComponent::new())],
+            components: Vec::new(),
         }
     }
     pub async fn run(&mut self) -> Result<()> {
+        self.init_async().await?;
         let (action_tx, mut action_rx) = mpsc::unbounded_channel();
 
         let terminal = Terminal::new(CrosstermBackend::new(io()))?;
@@ -62,7 +63,7 @@ impl App {
                             // split horizontally, the right side is for log view
                             let layout = Layout::default()
                                 .direction(ratatui::layout::Direction::Horizontal)
-                                .constraints([Constraint::Fill(1), Constraint::Max(60)])
+                                .constraints([Constraint::Fill(1), Constraint::Max(75)])
                                 .split(f.size());
                             if let Err(e) = LogComponent.draw(f, layout[1]) {
                                 action_tx
@@ -92,6 +93,10 @@ impl App {
             }
         }
         tui.end()?;
+        Ok(())
+    }
+    async fn init_async(&mut self) -> Result<()> {
+        self.components.push(Box::new(MainComponent::new().await?));
         Ok(())
     }
     fn handle_events(&mut self, event: Event) -> Option<Action> {

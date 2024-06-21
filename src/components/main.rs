@@ -1,45 +1,76 @@
-use super::views::{feed::FeedView, View};
+use super::login::LoginComponent;
+use super::view::ViewComponent;
 use super::Component;
 use crate::types::Action;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::layout::Rect;
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::widgets::{Block, BorderType};
 use ratatui::Frame;
 
-pub struct MainComponent {
-    views: Vec<View>,
+#[derive(Default)]
+struct State {
+    selected: Option<usize>,
 }
 
-impl MainComponent {
-    pub fn new() -> Self {
-        Self {
-            views: vec![View::Feed(FeedView::new())],
-        }
+pub struct MainComponent<'a> {
+    views: Vec<ViewComponent<'a>>,
+    state: State,
+}
+
+impl<'a> MainComponent<'a> {
+    pub async fn new() -> Result<Self> {
+        Ok(Self {
+            views: vec![
+                ViewComponent::Login(Box::new(LoginComponent::new())),
+                ViewComponent::Login(Box::new(LoginComponent::new())),
+            ],
+            state: State { selected: Some(0) },
+        })
     }
 }
 
-impl Component for MainComponent {
+impl<'a> Component for MainComponent<'a> {
+    fn init(&mut self, rect: Rect) -> Result<()> {
+        for view in self.views.iter_mut() {
+            view.init(rect)?;
+        }
+        Ok(())
+    }
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        match (key.code, key.modifiers) {
-            (KeyCode::Char('n'), KeyModifiers::CONTROL) => return Ok(Some(Action::NextItem)),
-            (KeyCode::Char('p'), KeyModifiers::CONTROL) => return Ok(Some(Action::PrevItem)),
-            (KeyCode::Down, KeyModifiers::NONE) => return Ok(Some(Action::NextItem)),
-            (KeyCode::Up, KeyModifiers::NONE) => return Ok(Some(Action::PrevItem)),
-            _ => {}
+        if matches!(
+            (key.code, key.modifiers),
+            (KeyCode::Char('o'), KeyModifiers::CONTROL)
+        ) {
+            return Ok(Some(Action::NextFocus));
+        } else if let Some(selected) = self.state.selected {
+            return self.views[selected].handle_key_events(key);
         }
         Ok(None)
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
-        if let Some(top) = self.views.last_mut() {
-            if matches!(action, Action::NextItem | Action::PrevItem) {
-                return top.update(action);
-            }
+        // TODO: update non-selected views
+        if matches!(action, Action::NextFocus) {
+            self.state.selected = Some(self.state.selected.map_or(0, |s| s + 1) % self.views.len());
+        } else if let Some(selected) = self.state.selected {
+            return self.views[selected].update(action);
         }
         Ok(None)
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        if let Some(top) = self.views.last_mut() {
-            top.draw(f, area)?;
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(self.views.iter().map(|_| Constraint::Fill(1)))
+            .split(area);
+        for (i, (area, view)) in layout.iter().zip(self.views.iter_mut()).enumerate() {
+            let mut block = Block::bordered()
+                .title(format!("column {i:02}"))
+                .title_alignment(Alignment::Center);
+            if self.state.selected == Some(i) {
+                block = block.border_type(BorderType::Double)
+            }
+            view.draw(f, block.inner(*area))?;
+            f.render_widget(block, *area);
         }
         Ok(())
     }
