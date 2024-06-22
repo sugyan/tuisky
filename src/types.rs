@@ -1,11 +1,10 @@
-use bsky_sdk::agent::config::Config;
 use crossterm::event::{KeyEvent, MouseEvent};
 
 #[derive(Debug, Clone)]
 pub enum Action {
     Error(String),
     Quit,
-    Tick,
+    Tick(usize),
     Render,
     NextItem,
     PrevItem,
@@ -14,12 +13,11 @@ pub enum Action {
     NextFocus,
     PrevFocus,
     Submit,
-    Login(Config),
 }
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    Tick,
+    Tick(usize),
     Render,
     Key(KeyEvent),
     Mouse(MouseEvent),

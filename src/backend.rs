@@ -1,3 +1,3 @@
 mod model;
 
-pub use model::Views;
+pub use model::Manager;

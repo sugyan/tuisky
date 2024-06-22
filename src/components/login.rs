@@ -25,28 +25,32 @@ enum FocusField {
     None,
 }
 
-pub struct LoginComponent<'a> {
-    identifier: TextState<'a>,
-    password: TextState<'a>,
+pub struct LoginComponent {
+    identifier: TextState<'static>,
+    password: TextState<'static>,
     current: FocusField,
     result: Arc<RwLock<Option<LoginEvent>>>,
-    event_handler: Option<UnboundedSender<ViewEvent>>,
+    event_handler: UnboundedSender<ViewEvent>,
 }
 
-impl<'a> LoginComponent<'a> {
-    pub fn new() -> Self {
+impl LoginComponent {
+    pub fn new(event_handler: UnboundedSender<ViewEvent>) -> Self {
         Self {
             identifier: TextState::new(),
             password: TextState::new(),
             current: FocusField::Identifier,
             result: Arc::new(RwLock::new(None)),
-            event_handler: None,
+            event_handler,
         }
     }
-    pub fn register_view_event_handler(&mut self, tx: UnboundedSender<ViewEvent>) {
-        self.event_handler = Some(tx);
+    fn current(&self) -> Option<&TextState<'static>> {
+        match self.current {
+            FocusField::Identifier => Some(&self.identifier),
+            FocusField::Password => Some(&self.password),
+            FocusField::None => None,
+        }
     }
-    fn current(&mut self) -> Option<&mut TextState<'a>> {
+    fn current_mut(&mut self) -> Option<&mut TextState<'static>> {
         match self.current {
             FocusField::Identifier => Some(&mut self.identifier),
             FocusField::Password => Some(&mut self.password),
@@ -58,28 +62,26 @@ impl<'a> LoginComponent<'a> {
         let identifier = self.identifier.value().to_string();
         let password = self.password.value().to_string();
         let result = Arc::clone(&self.result);
-        if let Some(event_handler) = &self.event_handler {
-            let event_tx = event_handler.clone();
-            tokio::spawn(async move {
-                while let Some(event) = rx.recv().await {
-                    match &event {
-                        LoginEvent::Success(config) => {
-                            log::info!("login succeeded: {config:?}");
-                            event_tx
-                                .send(ViewEvent::Login(config.clone()))
-                                .expect("failed to send login event")
-                        }
-                        LoginEvent::Failure(e) => {
-                            log::warn!("login failed: {e}");
-                        }
+        let event_tx = self.event_handler.clone();
+        tokio::spawn(async move {
+            while let Some(event) = rx.recv().await {
+                match &event {
+                    LoginEvent::Success(config) => {
+                        log::info!("login succeeded: {config:?}");
+                        event_tx
+                            .send(ViewEvent::Login(config.clone()))
+                            .expect("failed to send login event")
                     }
-                    if let Ok(mut result) = result.write() {
-                        result.replace(event);
+                    LoginEvent::Failure(e) => {
+                        log::warn!("login failed: {e}");
                     }
                 }
-            });
-            tokio::spawn(async move { Self::async_login(&identifier, &password, tx).await });
-        }
+                if let Ok(mut result) = result.write() {
+                    result.replace(event);
+                }
+            }
+        });
+        tokio::spawn(async move { Self::async_login(&identifier, &password, tx).await });
         Ok(())
     }
     async fn async_login(
@@ -98,13 +100,13 @@ impl<'a> LoginComponent<'a> {
     }
 }
 
-impl Component for LoginComponent<'_> {
+impl Component for LoginComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
         match (key.code, key.modifiers) {
             (KeyCode::Tab, KeyModifiers::NONE) => Ok(Some(Action::NextInput)),
             (KeyCode::BackTab, KeyModifiers::SHIFT) => Ok(Some(Action::PrevInput)),
             _ => {
-                if let Some(current) = self.current() {
+                if let Some(current) = self.current_mut() {
                     current.handle_key_event(key);
                 }
                 Ok(if key.code == KeyCode::Enter {

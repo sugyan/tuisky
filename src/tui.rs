@@ -48,13 +48,17 @@ where
             let mut reader = EventStream::new();
             let mut tick_interval = time::interval(Duration::from_secs(1));
             let mut render_interval = time::interval(Duration::from_secs_f64(1.0 / frame_rate));
+            let mut tick = 0;
             loop {
                 let event = reader.next().fuse();
                 let tick_tick = tick_interval.tick();
                 let tick_render = render_interval.tick();
                 tokio::select! {
                     e = event => Self::handle_crossterm_event(e, &event_tx),
-                    _ = tick_tick => event_tx.send(Event::Tick).unwrap(),
+                    _ = tick_tick => {
+                        tick += 1;
+                        event_tx.send(Event::Tick(tick)).unwrap()
+                    },
                     _ = tick_render => event_tx.send(Event::Render).unwrap(),
                 }
             }
