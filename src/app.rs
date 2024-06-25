@@ -39,7 +39,6 @@ impl App {
             component.register_action_handler(action_tx.clone())?;
         }
         // TODO: config handler?
-        self.main_component.init_async(tui.size()?).await?;
         self.main_component.init(tui.size()?)?;
         for component in self.components.iter_mut() {
             component.init(tui.size()?)?;

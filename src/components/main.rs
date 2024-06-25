@@ -1,11 +1,8 @@
-use super::bsky::BskyComponent;
 use super::login::LoginComponent;
-use super::view::{ViewComponent, ViewEvent};
+use super::view::ViewComponent;
 use super::Component;
-use crate::backend::Manager;
 use crate::types::Action;
 use bsky_sdk::agent::config::Config;
-use bsky_sdk::BskyAgent;
 use color_eyre::eyre::eyre;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -16,8 +13,7 @@ use ratatui::Frame;
 use serde::{Deserialize, Serialize};
 use std::fs::{create_dir_all, File};
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct AppData {
@@ -35,88 +31,26 @@ struct State {
 }
 
 pub struct MainComponent {
-    views: Vec<Arc<RwLock<ViewComponent>>>,
+    columns: Vec<ViewComponent>,
     state: State,
+    action_tx: Option<UnboundedSender<Action>>,
 }
 
 impl MainComponent {
     pub fn new() -> Self {
         Self {
-            views: Vec::new(),
+            columns: Vec::new(),
             state: State { selected: None },
+            action_tx: None,
         }
-    }
-    pub async fn init_async(&mut self, _rect: Rect) -> Result<()> {
-        let columns = 2; // TODO
-        if let Ok(appdata) = Self::load().await {
-            for (_, view) in (0..columns).zip(appdata.views) {
-                if let Some(config) = view.agent {
-                    let component = Arc::new(RwLock::new(ViewComponent::Loading));
-                    self.views.push(component.clone());
-                    tokio::spawn(async move {
-                        let Ok(agent) = BskyAgent::builder().config(config).build().await else {
-                            return log::error!("failed to build agent from config");
-                        };
-                        let Ok(mut c) = component.write() else {
-                            return log::error!("failed to write component");
-                        };
-                        *c = ViewComponent::Bsky(Box::new(BskyComponent::new(Manager::new(
-                            Arc::new(agent),
-                        ))));
-                    });
-                } else {
-                    self.add_login_component();
-                }
-            }
-        } else {
-            for _ in 0..columns {
-                self.add_login_component();
-            }
-        }
-        if !self.views.is_empty() {
-            self.state.selected = Some(0);
-        }
-        Ok(())
-    }
-    fn add_login_component(&mut self) {
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        let component = Arc::new(RwLock::new(ViewComponent::Login(Box::new(
-            LoginComponent::new(tx.clone()),
-        ))));
-        self.views.push(component.clone());
-        tokio::spawn(async move {
-            while let Some(event) = rx.recv().await {
-                match event {
-                    ViewEvent::Login(config) => {
-                        let Ok(agent) = BskyAgent::builder().config(config).build().await else {
-                            return log::error!("failed to build agent from config");
-                        };
-                        let Ok(preferences) = agent.get_preferences(true).await else {
-                            return log::error!("failed to get preferences");
-                        };
-                        agent.configure_labelers_from_preferences(&preferences);
-                        if let Ok(mut c) = component.write() {
-                            *c = ViewComponent::Bsky(Box::new(BskyComponent::new(Manager::new(
-                                Arc::new(agent),
-                            ))));
-                        }
-                    }
-                }
-            }
-        });
     }
     pub async fn save(&self) -> Result<()> {
         let mut appdata = AppData {
-            views: Vec::with_capacity(self.views.len()),
+            views: Vec::with_capacity(self.columns.len()),
         };
-        let managers = self
-            .views
-            .iter()
-            .map(|view| view.read().ok().and_then(|v| v.get_manager()))
-            .collect::<Vec<_>>();
-        for manager in managers {
-            let config = if let Some(m) = manager {
-                Some(m.agent_config().await)
+        for view in &self.columns {
+            let config = if let Some(m) = &view.manager {
+                Some(m.get_agent_config().await)
             } else {
                 None
             };
@@ -127,7 +61,7 @@ impl MainComponent {
         log::info!("saved appdata to: {path:?}");
         Ok(())
     }
-    async fn load() -> Result<AppData> {
+    fn load() -> Result<AppData> {
         let path = Self::appdata_path()?;
         let appdata = serde_json::from_reader::<_, AppData>(File::open(&path)?)?;
         log::info!("loaded appdata from {path:?}");
@@ -148,11 +82,37 @@ impl MainComponent {
 }
 
 impl Component for MainComponent {
+    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
+        self.action_tx = Some(tx);
+        Ok(())
+    }
     fn init(&mut self, rect: Rect) -> Result<()> {
-        for view in self.views.iter_mut() {
-            if let Ok(mut view) = view.write() {
-                view.init(rect)?;
+        let columns = 2; // TODO
+        let appdata = if let Ok(appdata) = Self::load() {
+            appdata
+        } else {
+            log::warn!("failed to load appdata, using default");
+            AppData::default()
+        };
+        for i in 0..columns {
+            let action_tx = self
+                .action_tx
+                .clone()
+                .ok_or_else(|| eyre!("failed to get action tx"))?;
+            let mut component = ViewComponent::new(action_tx.clone());
+            component.component = Some(Box::new(LoginComponent::new(component.id, action_tx)));
+            if let Some(view) = appdata.views.get(i) {
+                if let Some(config) = &view.agent {
+                    component.build_agent(config);
+                }
             }
+            self.columns.push(component);
+        }
+        if !self.columns.is_empty() {
+            self.state.selected = Some(0);
+        }
+        for view in self.columns.iter_mut() {
+            view.init(rect)?;
         }
         Ok(())
     }
@@ -163,19 +123,26 @@ impl Component for MainComponent {
         ) {
             return Ok(Some(Action::NextFocus));
         } else if let Some(selected) = self.state.selected {
-            if let Ok(mut view) = self.views[selected].write() {
-                return view.handle_key_events(key);
-            }
+            return self.columns[selected].handle_key_events(key);
         }
         Ok(None)
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         // TODO: update non-selected views?
-        if matches!(action, Action::NextFocus) {
-            self.state.selected = Some(self.state.selected.map_or(0, |s| s + 1) % self.views.len());
-        } else if let Some(selected) = self.state.selected {
-            if let Ok(mut view) = self.views[selected].write() {
-                return view.update(action);
+        match action {
+            Action::NextFocus => {
+                self.state.selected =
+                    Some(self.state.selected.map_or(0, |s| s + 1) % self.columns.len());
+            }
+            Action::Login((id, _)) | Action::Transition((id, _)) => {
+                if let Some(view) = self.columns.iter_mut().find(|v| v.id == id) {
+                    return view.update(action);
+                }
+            }
+            _ => {
+                if let Some(selected) = self.state.selected {
+                    return self.columns[selected].update(action);
+                }
             }
         }
         Ok(None)
@@ -183,18 +150,16 @@ impl Component for MainComponent {
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints(self.views.iter().map(|_| Constraint::Fill(1)))
+            .constraints(self.columns.iter().map(|_| Constraint::Fill(1)))
             .split(area);
-        for (i, (area, view)) in layout.iter().zip(self.views.iter()).enumerate() {
+        for (i, (area, view)) in layout.iter().zip(self.columns.iter_mut()).enumerate() {
             let mut block = Block::bordered()
-                .title(format!("column {i:02}"))
+                .title(view.title())
                 .title_alignment(Alignment::Center);
             if self.state.selected == Some(i) {
                 block = block.border_type(BorderType::Double)
             }
-            if let Ok(mut view) = view.write() {
-                view.draw(f, block.inner(*area))?;
-            }
+            view.draw(f, block.inner(*area))?;
             f.render_widget(block, *area);
         }
         Ok(())

@@ -1,6 +1,10 @@
+use bsky_sdk::{preference::Preferences, BskyAgent};
 use crossterm::event::{KeyEvent, MouseEvent};
+use std::fmt::{Debug, Formatter, Result};
 
-#[derive(Debug, Clone)]
+pub type IdType = u32;
+
+#[derive(Clone)]
 pub enum Action {
     Error(String),
     Quit,
@@ -13,6 +17,40 @@ pub enum Action {
     NextFocus,
     PrevFocus,
     Submit,
+    Login((IdType, Box<BskyAgent>)),
+    Transition((IdType, View)),
+    Updated((IdType, Box<ViewData>)),
+}
+
+impl Debug for Action {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Self::Error(arg) => f.debug_tuple("Error").field(arg).finish(),
+            Self::Quit => write!(f, "Quit"),
+            Self::Tick(arg) => f.debug_tuple("Tick").field(arg).finish(),
+            Self::Render => write!(f, "Render"),
+            Self::NextItem => write!(f, "NextItem"),
+            Self::PrevItem => write!(f, "PrevItem"),
+            Self::NextInput => write!(f, "NextInput"),
+            Self::PrevInput => write!(f, "PrevInput"),
+            Self::NextFocus => write!(f, "NextFocus"),
+            Self::PrevFocus => write!(f, "PrevFocus"),
+            Self::Submit => write!(f, "Submit"),
+            Self::Login((arg, _)) => f.debug_tuple("Login").field(arg).finish(),
+            Self::Transition(arg) => f.debug_tuple("Transition").field(arg).finish(),
+            Self::Updated((arg, _)) => f.debug_tuple("Updated").field(arg).finish(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ViewData {
+    Preferences(Box<Preferences>),
+}
+
+#[derive(Debug, Clone)]
+pub enum View {
+    Root,
 }
 
 #[derive(Debug, Clone)]

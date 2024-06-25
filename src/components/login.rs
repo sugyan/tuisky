@@ -1,7 +1,6 @@
-use super::view::ViewEvent;
 use super::Component;
-use crate::types::Action;
-use bsky_sdk::agent::config::Config;
+use crate::types::{Action, IdType};
+use atrium_api::agent::Session;
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -10,12 +9,12 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::widgets::{Block, Borders, Padding, Paragraph, Wrap};
 use ratatui::Frame;
 use std::sync::{Arc, RwLock};
-use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 use tui_prompts::{State, TextPrompt, TextRenderStyle, TextState};
 
 #[derive(Debug)]
 enum LoginEvent {
-    Success(Config),
+    Success(Session),
     Failure(String),
 }
 
@@ -26,31 +25,26 @@ enum FocusField {
 }
 
 pub struct LoginComponent {
+    id: IdType,
     identifier: TextState<'static>,
     password: TextState<'static>,
     current: FocusField,
     result: Arc<RwLock<Option<LoginEvent>>>,
-    event_handler: UnboundedSender<ViewEvent>,
+    action_tx: UnboundedSender<Action>,
 }
 
 impl LoginComponent {
-    pub fn new(event_handler: UnboundedSender<ViewEvent>) -> Self {
+    pub fn new(id: IdType, action_tx: UnboundedSender<Action>) -> Self {
         Self {
+            id,
             identifier: TextState::new(),
             password: TextState::new(),
             current: FocusField::Identifier,
             result: Arc::new(RwLock::new(None)),
-            event_handler,
+            action_tx, // event_handler,
         }
     }
-    fn current(&self) -> Option<&TextState<'static>> {
-        match self.current {
-            FocusField::Identifier => Some(&self.identifier),
-            FocusField::Password => Some(&self.password),
-            FocusField::None => None,
-        }
-    }
-    fn current_mut(&mut self) -> Option<&mut TextState<'static>> {
+    fn current(&mut self) -> Option<&mut TextState<'static>> {
         match self.current {
             FocusField::Identifier => Some(&mut self.identifier),
             FocusField::Password => Some(&mut self.password),
@@ -58,44 +52,34 @@ impl LoginComponent {
         }
     }
     fn login(&self) -> Result<()> {
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let id = self.id;
         let identifier = self.identifier.value().to_string();
         let password = self.password.value().to_string();
         let result = Arc::clone(&self.result);
-        let event_tx = self.event_handler.clone();
+        let action_tx = self.action_tx.clone();
         tokio::spawn(async move {
-            while let Some(event) = rx.recv().await {
-                match &event {
-                    LoginEvent::Success(config) => {
-                        log::info!("login succeeded: {config:?}");
-                        event_tx
-                            .send(ViewEvent::Login(config.clone()))
-                            .expect("failed to send login event")
-                    }
-                    LoginEvent::Failure(e) => {
-                        log::warn!("login failed: {e}");
+            let agent = BskyAgent::builder()
+                .build()
+                .await
+                .expect("failed to build agent");
+            match agent.login(identifier, password).await {
+                Ok(session) => {
+                    log::info!("login succeeded: {session:?}");
+                    action_tx
+                        .send(Action::Login((id, Box::new(agent))))
+                        .expect("failed to send login event");
+                    if let Ok(mut result) = result.write() {
+                        result.replace(LoginEvent::Success(session));
                     }
                 }
-                if let Ok(mut result) = result.write() {
-                    result.replace(event);
+                Err(e) => {
+                    log::warn!("login failed: {e}");
+                    if let Ok(mut result) = result.write() {
+                        result.replace(LoginEvent::Failure(e.to_string()));
+                    }
                 }
             }
         });
-        tokio::spawn(async move { Self::async_login(&identifier, &password, tx).await });
-        Ok(())
-    }
-    async fn async_login(
-        identifier: &str,
-        password: &str,
-        tx: UnboundedSender<LoginEvent>,
-    ) -> Result<()> {
-        let agent = BskyAgent::builder().build().await?;
-        match agent.login(identifier, password).await {
-            Ok(_) => tx.send(LoginEvent::Success(agent.to_config().await))?,
-            Err(e) => {
-                tx.send(LoginEvent::Failure(e.to_string()))?;
-            }
-        }
         Ok(())
     }
 }
@@ -106,7 +90,7 @@ impl Component for LoginComponent {
             (KeyCode::Tab, KeyModifiers::NONE) => Ok(Some(Action::NextInput)),
             (KeyCode::BackTab, KeyModifiers::SHIFT) => Ok(Some(Action::PrevInput)),
             _ => {
-                if let Some(current) = self.current_mut() {
+                if let Some(current) = self.current() {
                     current.handle_key_event(key);
                 }
                 Ok(if key.code == KeyCode::Enter {
@@ -166,9 +150,9 @@ impl Component for LoginComponent {
         if let Ok(result) = self.result.read() {
             if let Some(event) = result.as_ref() {
                 let paragraph = match event {
-                    LoginEvent::Success(config) => Paragraph::new(format!(
+                    LoginEvent::Success(session) => Paragraph::new(format!(
                         "Successfully logged in as {}",
-                        config.session.as_ref().unwrap().data.handle.as_ref()
+                        session.handle.as_ref()
                     ))
                     .style(Style::default().green())
                     .wrap(Wrap::default()),

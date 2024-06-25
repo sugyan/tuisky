@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-atrium-api = "0.22.3"
+atrium-api = "0.23.0"
 bsky-sdk = "0.1.2"
 chrono = { version = "0.4.38", default-features = false }
 color-eyre = "0.6.3"
@@ -23,3 +23,7 @@ tokio = { version = "1.38.0", features = [
 ] }
 tui-logger = "0.11.1"
 tui-prompts = "0.3.12"
+
+[patch.crates-io]
+atrium-api = { path = "../atrium/atrium-api" }
+bsky-sdk = { path = "../atrium/bsky-sdk" }

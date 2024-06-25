@@ -78,27 +78,7 @@ dependencies = [
 
 [[package]]
 name = "atrium-api"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d4546cc566b6c62d81f5898bf55a3d1a8ad4272f1092256e7accc6769cd27f4"
-dependencies = [
- "async-trait",
- "atrium-xrpc",
- "chrono",
- "http",
- "ipld-core",
- "langtag",
- "regex",
- "serde",
- "serde_bytes",
- "tokio",
-]
-
-[[package]]
-name = "atrium-api"
 version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1438d95091db4e9ed9d3dcfc408c12a0900c685bd2668b3befaaeec1eb3c5ef"
 dependencies = [
  "async-trait",
  "atrium-xrpc",
@@ -115,8 +95,6 @@ dependencies = [
 [[package]]
 name = "atrium-xrpc"
 version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55f048226b0135e5592b295fd90e0bcc9b6752882195911bfe1a2562e761812e"
 dependencies = [
  "async-trait",
  "http",
@@ -129,8 +107,6 @@ dependencies = [
 [[package]]
 name = "atrium-xrpc-client"
 version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15bdd46ef504ef70ac13611b51cf53cc020696dcd701df5c458a58ba6f5927c1"
 dependencies = [
  "async-trait",
  "atrium-xrpc",
@@ -179,12 +155,10 @@ checksum = "cf4b9d6a944f767f8e5e0db018570623c85f3d925ac718db4e06d0187adb21c1"
 [[package]]
 name = "bsky-sdk"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7434129a98bf2dccc2cdf3b5fd0dd0727982a5fb1306cbf332b898eb478fd56e"
 dependencies = [
  "anyhow",
  "async-trait",
- "atrium-api 0.23.0",
+ "atrium-api",
  "atrium-xrpc-client",
  "ipld-core",
  "psl",
@@ -1670,7 +1644,7 @@ dependencies = [
 name = "tuisky"
 version = "0.1.0"
 dependencies = [
- "atrium-api 0.22.3",
+ "atrium-api",
  "bsky-sdk",
  "chrono",
  "color-eyre",
