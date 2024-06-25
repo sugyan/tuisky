@@ -1,5 +1,4 @@
-use super::login::LoginComponent;
-use super::view::ViewComponent;
+use super::column::ColumnComponent;
 use super::Component;
 use crate::types::Action;
 use bsky_sdk::agent::config::Config;
@@ -31,17 +30,17 @@ struct State {
 }
 
 pub struct MainComponent {
-    columns: Vec<ViewComponent>,
+    columns: Vec<ColumnComponent>,
     state: State,
-    action_tx: Option<UnboundedSender<Action>>,
+    action_tx: UnboundedSender<Action>,
 }
 
 impl MainComponent {
-    pub fn new() -> Self {
+    pub fn new(action_tx: UnboundedSender<Action>) -> Self {
         Self {
             columns: Vec::new(),
             state: State { selected: None },
-            action_tx: None,
+            action_tx,
         }
     }
     pub async fn save(&self) -> Result<()> {
@@ -82,10 +81,6 @@ impl MainComponent {
 }
 
 impl Component for MainComponent {
-    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
-        self.action_tx = Some(tx);
-        Ok(())
-    }
     fn init(&mut self, rect: Rect) -> Result<()> {
         let columns = 2; // TODO
         let appdata = if let Ok(appdata) = Self::load() {
@@ -95,24 +90,17 @@ impl Component for MainComponent {
             AppData::default()
         };
         for i in 0..columns {
-            let action_tx = self
-                .action_tx
-                .clone()
-                .ok_or_else(|| eyre!("failed to get action tx"))?;
-            let mut component = ViewComponent::new(action_tx.clone());
-            component.component = Some(Box::new(LoginComponent::new(component.id, action_tx)));
-            if let Some(view) = appdata.views.get(i) {
-                if let Some(config) = &view.agent {
-                    component.build_agent(config);
-                }
+            let action_tx = self.action_tx.clone();
+            let mut column = ColumnComponent::new(action_tx.clone());
+            if let Some(config) = appdata.views.get(i).and_then(|view| view.agent.as_ref()) {
+                column.init_with_config(config)?;
+            } else {
+                column.init(rect)?;
             }
-            self.columns.push(component);
+            self.columns.push(column);
         }
         if !self.columns.is_empty() {
             self.state.selected = Some(0);
-        }
-        for view in self.columns.iter_mut() {
-            view.init(rect)?;
         }
         Ok(())
     }
@@ -128,20 +116,16 @@ impl Component for MainComponent {
         Ok(None)
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
-        // TODO: update non-selected views?
         match action {
             Action::NextFocus => {
                 self.state.selected =
                     Some(self.state.selected.map_or(0, |s| s + 1) % self.columns.len());
             }
-            Action::Login((id, _)) | Action::Transition((id, _)) => {
-                if let Some(view) = self.columns.iter_mut().find(|v| v.id == id) {
-                    return view.update(action);
-                }
-            }
             _ => {
-                if let Some(selected) = self.state.selected {
-                    return self.columns[selected].update(action);
+                for column in self.columns.iter_mut() {
+                    if let Some(action) = column.update(action.clone())? {
+                        return Ok(Some(action));
+                    }
                 }
             }
         }

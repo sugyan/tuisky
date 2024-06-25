@@ -1,8 +1,6 @@
-pub mod log;
-pub mod login;
+pub mod column;
 pub mod main;
-pub mod view;
-mod views;
+pub mod views;
 
 use crate::types::{Action, Event};
 use color_eyre::eyre::Result;

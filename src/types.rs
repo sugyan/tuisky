@@ -1,3 +1,4 @@
+use crate::components::views::types::Action as ViewAction;
 use bsky_sdk::{preference::Preferences, BskyAgent};
 use crossterm::event::{KeyEvent, MouseEvent};
 use std::fmt::{Debug, Formatter, Result};
@@ -10,16 +11,11 @@ pub enum Action {
     Quit,
     Tick(usize),
     Render,
-    NextItem,
-    PrevItem,
-    NextInput,
-    PrevInput,
     NextFocus,
     PrevFocus,
-    Submit,
+    View((IdType, ViewAction)),
     Login((IdType, Box<BskyAgent>)),
     Transition((IdType, View)),
-    Updated((IdType, Box<ViewData>)),
 }
 
 impl Debug for Action {
@@ -29,16 +25,11 @@ impl Debug for Action {
             Self::Quit => write!(f, "Quit"),
             Self::Tick(arg) => f.debug_tuple("Tick").field(arg).finish(),
             Self::Render => write!(f, "Render"),
-            Self::NextItem => write!(f, "NextItem"),
-            Self::PrevItem => write!(f, "PrevItem"),
-            Self::NextInput => write!(f, "NextInput"),
-            Self::PrevInput => write!(f, "PrevInput"),
+            Self::View(arg) => f.debug_tuple("View").field(arg).finish(),
             Self::NextFocus => write!(f, "NextFocus"),
             Self::PrevFocus => write!(f, "PrevFocus"),
-            Self::Submit => write!(f, "Submit"),
             Self::Login((arg, _)) => f.debug_tuple("Login").field(arg).finish(),
             Self::Transition(arg) => f.debug_tuple("Transition").field(arg).finish(),
-            Self::Updated((arg, _)) => f.debug_tuple("Updated").field(arg).finish(),
         }
     }
 }

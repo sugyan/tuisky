@@ -1,5 +1,5 @@
-use super::Component;
-use crate::types::{Action, IdType};
+use super::types::Action;
+use super::ViewComponent;
 use atrium_api::agent::Session;
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
@@ -13,7 +13,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tui_prompts::{State, TextPrompt, TextRenderStyle, TextState};
 
 #[derive(Debug)]
-enum LoginEvent {
+enum LoginResult {
     Success(Session),
     Failure(String),
 }
@@ -25,23 +25,21 @@ enum FocusField {
 }
 
 pub struct LoginComponent {
-    id: IdType,
     identifier: TextState<'static>,
     password: TextState<'static>,
     current: FocusField,
-    result: Arc<RwLock<Option<LoginEvent>>>,
+    result: Arc<RwLock<Option<LoginResult>>>,
     action_tx: UnboundedSender<Action>,
 }
 
 impl LoginComponent {
-    pub fn new(id: IdType, action_tx: UnboundedSender<Action>) -> Self {
+    pub fn new(action_tx: UnboundedSender<Action>) -> Self {
         Self {
-            id,
             identifier: TextState::new(),
             password: TextState::new(),
             current: FocusField::Identifier,
             result: Arc::new(RwLock::new(None)),
-            action_tx, // event_handler,
+            action_tx,
         }
     }
     fn current(&mut self) -> Option<&mut TextState<'static>> {
@@ -52,7 +50,6 @@ impl LoginComponent {
         }
     }
     fn login(&self) -> Result<()> {
-        let id = self.id;
         let identifier = self.identifier.value().to_string();
         let password = self.password.value().to_string();
         let result = Arc::clone(&self.result);
@@ -65,17 +62,17 @@ impl LoginComponent {
             match agent.login(identifier, password).await {
                 Ok(session) => {
                     log::info!("login succeeded: {session:?}");
-                    action_tx
-                        .send(Action::Login((id, Box::new(agent))))
-                        .expect("failed to send login event");
+                    if let Err(e) = action_tx.send(Action::Login(Box::new(agent))) {
+                        log::error!("failed to send login event: {e}");
+                    }
                     if let Ok(mut result) = result.write() {
-                        result.replace(LoginEvent::Success(session));
+                        result.replace(LoginResult::Success(session));
                     }
                 }
                 Err(e) => {
                     log::warn!("login failed: {e}");
                     if let Ok(mut result) = result.write() {
-                        result.replace(LoginEvent::Failure(e.to_string()));
+                        result.replace(LoginResult::Failure(e.to_string()));
                     }
                 }
             }
@@ -84,7 +81,7 @@ impl LoginComponent {
     }
 }
 
-impl Component for LoginComponent {
+impl ViewComponent for LoginComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
         match (key.code, key.modifiers) {
             (KeyCode::Tab, KeyModifiers::NONE) => Ok(Some(Action::NextInput)),
@@ -94,7 +91,7 @@ impl Component for LoginComponent {
                     current.handle_key_event(key);
                 }
                 Ok(if key.code == KeyCode::Enter {
-                    Some(Action::Submit)
+                    Some(Action::Enter)
                 } else {
                     None
                 })
@@ -110,7 +107,7 @@ impl Component for LoginComponent {
                     FocusField::None => FocusField::Identifier,
                 };
             }
-            Action::Submit => {
+            Action::Enter => {
                 if self.identifier.is_finished() && self.password.is_finished() {
                     self.current = FocusField::None;
                     self.login()?;
@@ -150,13 +147,13 @@ impl Component for LoginComponent {
         if let Ok(result) = self.result.read() {
             if let Some(event) = result.as_ref() {
                 let paragraph = match event {
-                    LoginEvent::Success(session) => Paragraph::new(format!(
+                    LoginResult::Success(session) => Paragraph::new(format!(
                         "Successfully logged in as {}",
                         session.handle.as_ref()
                     ))
                     .style(Style::default().green())
                     .wrap(Wrap::default()),
-                    LoginEvent::Failure(e) => Paragraph::new(e.as_str())
+                    LoginResult::Failure(e) => Paragraph::new(e.as_str())
                         .style(Style::default().red())
                         .wrap(Wrap::default()),
                 };

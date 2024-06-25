@@ -1,4 +1,4 @@
-use crate::components::Component;
+use super::ViewComponent;
 use crate::types::{Action, ViewData};
 use color_eyre::Result;
 use ratatui::widgets::List;
@@ -17,21 +17,21 @@ impl RootComponent {
     }
 }
 
-impl Component for RootComponent {
-    fn update(&mut self, action: Action) -> Result<Option<Action>> {
-        if let Action::Updated((_, data)) = action {
-            match data.as_ref() {
-                ViewData::Preferences(preferences) => {
-                    self.items = preferences
-                        .saved_feeds
-                        .iter()
-                        .map(|feed| feed.value.clone())
-                        .collect()
-                }
-            }
-        }
-        Ok(None)
-    }
+impl ViewComponent for RootComponent {
+    // fn update(&mut self, action: Action) -> Result<Option<Action>> {
+    //     if let Action::Updated((_, data)) = action {
+    //         match data.as_ref() {
+    //             ViewData::Preferences(preferences) => {
+    //                 self.items = preferences
+    //                     .saved_feeds
+    //                     .iter()
+    //                     .map(|feed| feed.value.clone())
+    //                     .collect()
+    //             }
+    //         }
+    //     }
+    //     Ok(None)
+    // }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
         f.render_widget(
             List::new(self.items.iter().map(String::from).collect::<Vec<_>>()),
