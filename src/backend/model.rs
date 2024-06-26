@@ -10,7 +10,6 @@ use tokio::time;
 
 pub struct Manager {
     agent: Arc<BskyAgent>,
-    views: Vec<View>,
     pub data: Data,
 }
 
@@ -39,7 +38,6 @@ impl Manager {
     pub fn new(agent: Arc<BskyAgent>) -> Self {
         Self {
             agent,
-            views: Vec::new(),
             data: Data::default(),
         }
     }
@@ -62,12 +60,6 @@ impl Manager {
     }
     pub async fn get_agent_config(&self) -> Config {
         self.agent.to_config().await
-    }
-    pub fn current(&self) -> Option<&View> {
-        self.views.last()
-    }
-    pub fn current_mut(&mut self) -> Option<&mut View> {
-        self.views.last_mut()
     }
     async fn preferences(
         agent: &Arc<BskyAgent>,
@@ -100,7 +92,8 @@ impl Manager {
             .bsky
             .feed
             .get_feed_generators(
-                atrium_api::app::bsky::feed::get_feed_generators::ParametersData { feeds }.into(),
+                bsky_sdk::api::app::bsky::feed::get_feed_generators::ParametersData { feeds }
+                    .into(),
             )
             .await
             .map(|output| {

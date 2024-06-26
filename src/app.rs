@@ -81,9 +81,11 @@ impl App {
                                 .split(f.size());
                             // render main components to the left side
                             if let Err(e) = main_component.draw(f, layout[0]) {
-                                action_tx
-                                    .send(Action::Error(format!("failed to draw: {e:?}")))
-                                    .expect("failed to send error");
+                                if let Err(e) =
+                                    action_tx.send(Action::Error(format!("failed to draw: {e:?}")))
+                                {
+                                    log::error!("failed to send error: {e}");
+                                }
                             }
                             // render log components to the right side
                             f.render_widget(
@@ -99,9 +101,11 @@ impl App {
                             // other components?
                             for component in self.components.iter_mut() {
                                 if let Err(e) = component.draw(f, layout[0]) {
-                                    action_tx
+                                    if let Err(e) = action_tx
                                         .send(Action::Error(format!("failed to draw: {e:?}")))
-                                        .expect("failed to send error");
+                                    {
+                                        log::error!("failed to send error: {e}");
+                                    }
                                 }
                             }
                         })?;

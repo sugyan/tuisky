@@ -1,6 +1,6 @@
 use super::types::Action;
 use super::ViewComponent;
-use atrium_api::agent::Session;
+use bsky_sdk::api::agent::Session;
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -55,10 +55,9 @@ impl LoginComponent {
         let result = Arc::clone(&self.result);
         let action_tx = self.action_tx.clone();
         tokio::spawn(async move {
-            let agent = BskyAgent::builder()
-                .build()
-                .await
-                .expect("failed to build agent");
+            let Ok(agent) = BskyAgent::builder().build().await else {
+                return log::error!("failed to build agent");
+            };
             match agent.login(identifier, password).await {
                 Ok(session) => {
                     log::info!("login succeeded: {session:?}");

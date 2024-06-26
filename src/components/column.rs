@@ -1,13 +1,12 @@
 use super::views::login::LoginComponent;
-use super::views::noop::NoopComponent;
 use super::views::root::RootComponent;
 use super::views::types::Action as ViewAction;
 use super::views::ViewComponent;
 use super::Component;
 use crate::backend::Manager;
 use crate::types::{Action, IdType, View};
-use atrium_api::agent::Session;
 use bsky_sdk::agent::config::Config;
+use bsky_sdk::api::agent::Session;
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
@@ -21,7 +20,7 @@ static COUNTER: AtomicU32 = AtomicU32::new(0);
 pub struct ColumnComponent {
     pub id: IdType,
     pub manager: Option<Manager>,
-    pub component: Box<dyn ViewComponent>,
+    pub views: Vec<Box<dyn ViewComponent>>,
     session: Arc<RwLock<Option<Session>>>,
     action_tx: UnboundedSender<Action>,
     view_tx: UnboundedSender<ViewAction>,
@@ -56,7 +55,7 @@ impl ColumnComponent {
         Self {
             id,
             manager: None,
-            component: Box::new(NoopComponent),
+            views: Vec::new(),
             session: Arc::new(RwLock::new(None)),
             action_tx,
             view_tx,
@@ -86,21 +85,26 @@ impl ColumnComponent {
 
 impl Component for ColumnComponent {
     fn init(&mut self, _area: Rect) -> Result<()> {
-        self.component = Box::new(LoginComponent::new(self.view_tx.clone()));
+        self.views = vec![Box::new(LoginComponent::new(self.view_tx.clone()))];
         Ok(())
     }
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        self.component
-            .handle_key_events(key)
-            .map(|action| action.map(|a| Action::View((self.id, a))))
+        if let Some(view) = self.views.last_mut() {
+            view.handle_key_events(key)
+                .map(|action| action.map(|a| Action::View((self.id, a))))
+        } else {
+            Ok(None)
+        }
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::View((id, view_action)) if id == self.id => {
-                return self
-                    .component
-                    .update(view_action)
-                    .map(|action| action.map(|a| Action::View((self.id, a))));
+                return if let Some(view) = self.views.last_mut() {
+                    view.update(view_action)
+                        .map(|action| action.map(|a| Action::View((self.id, a))))
+                } else {
+                    Ok(None)
+                };
             }
             Action::Login((id, agent)) if id == self.id => {
                 {
@@ -122,10 +126,10 @@ impl Component for ColumnComponent {
             Action::Transition((id, view)) if id == self.id => {
                 if let Some(manager) = &self.manager {
                     if matches!(view, View::Root) {
-                        self.component = Box::new(RootComponent::new(
+                        self.views = vec![Box::new(RootComponent::new(
                             self.view_tx.clone(),
                             manager.data.saved_feeds.subscribe(),
-                        ));
+                        ))];
                     }
                 }
             }
@@ -134,6 +138,10 @@ impl Component for ColumnComponent {
         Ok(None)
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        self.component.draw(f, area)
+        if let Some(view) = self.views.last_mut() {
+            view.draw(f, area)
+        } else {
+            Ok(())
+        }
     }
 }

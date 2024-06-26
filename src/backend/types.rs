@@ -1,4 +1,4 @@
-use atrium_api::app::bsky::feed::defs::GeneratorView;
+use bsky_sdk::api::app::bsky::feed::defs::GeneratorView;
 
 #[derive(Debug, Clone)]
 pub struct SavedFeed {

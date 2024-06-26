@@ -1,5 +1,4 @@
 pub mod login;
-pub mod noop;
 pub mod root;
 pub mod types;
 
