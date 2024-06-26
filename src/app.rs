@@ -68,7 +68,7 @@ impl App {
                     Action::Quit => should_quit = true,
                     Action::Tick(i) => {
                         // TODO
-                        if i % 10 == 0 {
+                        if i % 60 == 0 {
                             main_component.save().await?;
                         }
                     }

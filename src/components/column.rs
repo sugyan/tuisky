@@ -35,6 +35,11 @@ impl ColumnComponent {
         tokio::spawn(async move {
             while let Some(action) = view_rx.recv().await {
                 match action {
+                    ViewAction::Render => {
+                        if let Err(e) = tx.send(Action::Render) {
+                            log::error!("failed to send render action: {e}");
+                        }
+                    }
                     ViewAction::Login(agent) => {
                         if let Err(e) = tx.send(Action::Login((id, agent))) {
                             log::error!("failed to send login action: {e}");
@@ -110,27 +115,18 @@ impl Component for ColumnComponent {
                     });
                 }
                 let manager = Manager::new(Arc::new(*agent));
-                //     let id = self.id;
-                //     let tx = self.action_tx.clone();
-                //     let mut rx = manager.data.preferences.subscribe();
-                //     tokio::spawn(async move {
-                //         while rx.changed().await.is_ok() {
-                //             let preferences = rx.borrow_and_update();
-                //             if let Err(e) = tx.send(Action::Updated((
-                //                 id,
-                //                 Box::new(ViewData::Preferences(Box::new(preferences.clone()))),
-                //             ))) {
-                //                 log::error!("failed to send preferences action: {e}");
-                //             }
-                //         }
-                //     });
-                //     manager.start();
+                manager.start();
                 self.manager = Some(manager);
                 return Ok(Some(Action::Transition((id, View::Root))));
             }
             Action::Transition((id, view)) if id == self.id => {
-                if matches!(view, View::Root) {
-                    self.component = Box::new(RootComponent::new());
+                if let Some(manager) = &self.manager {
+                    if matches!(view, View::Root) {
+                        self.component = Box::new(RootComponent::new(
+                            self.view_tx.clone(),
+                            manager.data.saved_feeds.subscribe(),
+                        ));
+                    }
                 }
             }
             _ => {}
