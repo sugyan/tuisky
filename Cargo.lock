@@ -1769,6 +1769,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "tui-logger"
 version = "0.11.2"
+source = "git+https://github.com/gin66/tui-logger?rev=775c759c89a808b6f479b869c533d33b18fe5f44#775c759c89a808b6f479b869c533d33b18fe5f44"
 dependencies = [
  "chrono",
  "fxhash",

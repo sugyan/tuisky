@@ -67,10 +67,10 @@ impl Manager {
         saved_feeds: &Sender<Vec<SavedFeed>>,
     ) {
         let Ok(prefs) = agent.get_preferences(true).await else {
-            return log::error!("failed to get preferences");
+            return log::warn!("failed to get preferences");
         };
 
-        log::debug!("got preferences");
+        log::info!("Update preferences");
         if let Err(e) = preferences.send(prefs.clone()) {
             log::error!("failed to send preferences data: {e}");
         }
@@ -104,7 +104,7 @@ impl Manager {
                     .collect::<HashMap<_, _>>()
             })
         else {
-            return log::error!("failed to get feeds");
+            return log::warn!("failed to get feeds");
         };
         // TODO: list
         let mut feeds = Vec::new();
@@ -130,10 +130,9 @@ impl Manager {
                 _ => {}
             }
         }
+        log::info!("Update saved feeds");
         if let Err(e) = saved_feeds.send(feeds) {
             log::error!("failed to send saved feeds: {e}");
         }
     }
 }
-
-pub enum View {}

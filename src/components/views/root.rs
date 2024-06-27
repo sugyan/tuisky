@@ -6,15 +6,14 @@ use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{List, ListState};
+use ratatui::widgets::{Block, List, ListState, Padding};
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch::Receiver;
 
 pub struct RootComponent {
-    items: Vec<Text<'static>>,
+    items: Vec<SavedFeed>,
     state: ListState,
-    action_tx: UnboundedSender<Action>,
 }
 
 impl RootComponent {
@@ -32,7 +31,6 @@ impl RootComponent {
         Self {
             items: Vec::new(),
             state: ListState::default(),
-            action_tx,
         }
     }
 }
@@ -46,6 +44,7 @@ impl ViewComponent for RootComponent {
             (KeyCode::Char('p'), KeyModifiers::CONTROL) | (KeyCode::Up, KeyModifiers::NONE) => {
                 Ok(Some(Action::PrevItem))
             }
+            (KeyCode::Enter, _) => Ok(Some(Action::Enter)),
             _ => Ok(None),
         }
     }
@@ -55,7 +54,7 @@ impl ViewComponent for RootComponent {
                 self.state.select(Some(
                     self.state
                         .selected()
-                        .map(|s| (s + 1).min(self.items.len() - 1))
+                        .map(|s| (s + 1).min(self.items.len()))
                         .unwrap_or_default(),
                 ));
                 return Ok(Some(Action::Render));
@@ -69,39 +68,21 @@ impl ViewComponent for RootComponent {
                 ));
                 return Ok(Some(Action::Render));
             }
+            Action::Enter if !self.items.is_empty() => {
+                if let Some(index) = self.state.selected() {
+                    if index == self.items.len() {
+                        return Ok(Some(Action::Logout));
+                    }
+                    if let Some(feed) = self.items.get(index) {
+                        // return Ok(Some(Action::ViewFeed(feed.clone())));
+                    }
+                }
+            }
             Action::Update(data) => {
                 let Data::SavedFeeds(feeds) = data.as_ref() else {
                     return Ok(None);
                 };
-                self.items = feeds
-                    .iter()
-                    .filter_map(|feed| match &feed.value {
-                        SavedFeedValue::Feed(generator_view) => Some(Text::from(vec![
-                            Line::from(vec![
-                                Span::from(generator_view.display_name.clone()).bold(),
-                                Span::from(" "),
-                                Span::from(format!(
-                                    "by {}",
-                                    generator_view.creator.display_name.clone().unwrap_or(
-                                        generator_view.creator.handle.as_ref().to_string()
-                                    )
-                                ))
-                                .dim(),
-                            ]),
-                            // Line::from(format!(
-                            //     "  {}",
-                            //     generator_view.description.clone().unwrap_or_default()
-                            // )),
-                            // Line::from(format!("  {}", generator_view.uri)).gray(),
-                        ])),
-                        SavedFeedValue::List => None,
-                        SavedFeedValue::Timeline(value) => Some(Text::from(vec![
-                            Line::from(value.clone()).bold(),
-                            // Line::from(String::new()),
-                            // Line::from(String::new()),
-                        ])),
-                    })
-                    .collect();
+                self.items.clone_from(feeds);
                 if self.state.selected().is_none() && !self.items.is_empty() {
                     self.state.select(Some(0));
                 }
@@ -111,8 +92,36 @@ impl ViewComponent for RootComponent {
         Ok(None)
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
+        let mut items = self
+            .items
+            .iter()
+            .filter_map(|feed| match &feed.value {
+                SavedFeedValue::Feed(generator_view) => Some(Text::from(vec![Line::from(vec![
+                    Span::from(generator_view.display_name.clone()).bold(),
+                    Span::from(" "),
+                    Span::from(format!(
+                        "by {}",
+                        generator_view
+                            .creator
+                            .display_name
+                            .clone()
+                            .unwrap_or(generator_view.creator.handle.as_ref().to_string())
+                    ))
+                    .dim(),
+                ])])),
+                SavedFeedValue::List => None,
+                SavedFeedValue::Timeline(value) => {
+                    Some(Text::from(vec![Line::from(value.clone()).bold()]))
+                }
+            })
+            .collect::<Vec<_>>();
+        if !items.is_empty() {
+            items.push(Text::from("Sign out").red());
+        }
         f.render_stateful_widget(
-            List::new(self.items.to_vec()).highlight_style(Style::default().reversed()),
+            List::new(items)
+                .block(Block::default().padding(Padding::uniform(1)))
+                .highlight_style(Style::default().reversed()),
             area,
             &mut self.state,
         );

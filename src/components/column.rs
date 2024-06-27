@@ -34,11 +34,6 @@ impl ColumnComponent {
         tokio::spawn(async move {
             while let Some(action) = view_rx.recv().await {
                 match action {
-                    ViewAction::Render => {
-                        if let Err(e) = tx.send(Action::Render) {
-                            log::error!("failed to send render action: {e}");
-                        }
-                    }
                     ViewAction::Login(agent) => {
                         if let Err(e) = tx.send(Action::Login((id, agent))) {
                             log::error!("failed to send login action: {e}");
@@ -100,8 +95,15 @@ impl Component for ColumnComponent {
         match action {
             Action::View((id, view_action)) if id == self.id => {
                 return if let Some(view) = self.views.last_mut() {
-                    view.update(view_action)
-                        .map(|action| action.map(|a| Action::View((self.id, a))))
+                    let result = view.update(view_action);
+                    if let Ok(Some(ViewAction::Logout)) = result {
+                        if let Ok(mut session) = self.session.write() {
+                            session.take();
+                        }
+                        self.manager = None;
+                        self.views = vec![Box::new(LoginComponent::new(self.view_tx.clone()))];
+                    }
+                    result.map(|action| action.map(|a| Action::View((self.id, a))))
                 } else {
                     Ok(None)
                 };

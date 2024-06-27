@@ -22,3 +22,7 @@ tokio = { version = "1.38.0", features = [
 ] }
 tui-logger = "0.11.2"
 tui-prompts = "0.3.13"
+
+[patch.crates-io]
+bsky-sdk = { path = "../atrium/bsky-sdk" }
+tui-logger = { git = "https://github.com/gin66/tui-logger", rev = "775c759c89a808b6f479b869c533d33b18fe5f44" }

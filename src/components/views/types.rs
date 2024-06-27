@@ -11,6 +11,7 @@ pub enum Action {
     PrevInput,
     Enter,
     Login(Box<BskyAgent>),
+    Logout,
     Update(Box<Data>),
 }
 
@@ -24,6 +25,7 @@ impl Debug for Action {
             Action::PrevInput => write!(f, "PrevInput"),
             Action::Enter => write!(f, "Enter"),
             Action::Login(_) => write!(f, "Login"),
+            Action::Logout => write!(f, "Logout"),
             Action::Update(_) => write!(f, "Update"),
         }
     }
