@@ -1,5 +1,5 @@
 use crate::components::views::types::Action as ViewAction;
-use bsky_sdk::{preference::Preferences, BskyAgent};
+use bsky_sdk::BskyAgent;
 use crossterm::event::{KeyEvent, MouseEvent};
 use std::fmt::{Debug, Formatter, Result};
 
@@ -15,7 +15,6 @@ pub enum Action {
     PrevFocus,
     View((IdType, ViewAction)),
     Login((IdType, Box<BskyAgent>)),
-    Transition((IdType, View)),
 }
 
 impl Debug for Action {
@@ -29,20 +28,12 @@ impl Debug for Action {
             Self::NextFocus => write!(f, "NextFocus"),
             Self::PrevFocus => write!(f, "PrevFocus"),
             Self::Login((arg, _)) => f.debug_tuple("Login").field(arg).finish(),
-            Self::Transition(arg) => f.debug_tuple("Transition").field(arg).finish(),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum ViewData {
-    Preferences(Box<Preferences>),
-}
-
-#[derive(Debug, Clone)]
-pub enum View {
-    Root,
-}
+pub enum View {}
 
 #[derive(Debug, Clone)]
 pub enum Event {

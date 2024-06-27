@@ -1,5 +1,4 @@
-pub mod event;
-mod model;
 pub mod types;
+mod watch;
 
-pub use model::Manager;
+pub use watch::Watcher;

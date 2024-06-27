@@ -48,7 +48,7 @@ impl MainComponent {
             views: Vec::with_capacity(self.columns.len()),
         };
         for view in &self.columns {
-            let config = if let Some(m) = &view.manager {
+            let config = if let Some(m) = &view.watcher {
                 Some(m.get_agent_config().await)
             } else {
                 None

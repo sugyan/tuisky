@@ -10,16 +10,18 @@ use ratatui::widgets::{Block, List, ListState, Padding};
 use ratatui::{layout::Rect, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch::Receiver;
+use tokio::task::JoinHandle;
 
 pub struct RootComponent {
     items: Vec<SavedFeed>,
     state: ListState,
+    handle: JoinHandle<()>,
 }
 
 impl RootComponent {
     pub fn new(action_tx: UnboundedSender<Action>, mut rx: Receiver<Vec<SavedFeed>>) -> Self {
         let tx = action_tx.clone();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             while rx.changed().await.is_ok() {
                 if let Err(e) = tx.send(Action::Update(Box::new(Data::SavedFeeds(
                     rx.borrow_and_update().clone(),
@@ -31,6 +33,7 @@ impl RootComponent {
         Self {
             items: Vec::new(),
             state: ListState::default(),
+            handle,
         }
     }
 }
@@ -71,6 +74,7 @@ impl ViewComponent for RootComponent {
             Action::Enter if !self.items.is_empty() => {
                 if let Some(index) = self.state.selected() {
                     if index == self.items.len() {
+                        self.handle.abort();
                         return Ok(Some(Action::Logout));
                     }
                     if let Some(feed) = self.items.get(index) {

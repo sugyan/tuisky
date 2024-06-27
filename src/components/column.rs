@@ -3,8 +3,8 @@ use super::views::root::RootComponent;
 use super::views::types::Action as ViewAction;
 use super::views::ViewComponent;
 use super::Component;
-use crate::backend::Manager;
-use crate::types::{Action, IdType, View};
+use crate::backend::Watcher;
+use crate::types::{Action, IdType};
 use bsky_sdk::agent::config::Config;
 use bsky_sdk::api::agent::Session;
 use bsky_sdk::BskyAgent;
@@ -19,7 +19,7 @@ static COUNTER: AtomicU32 = AtomicU32::new(0);
 
 pub struct ColumnComponent {
     pub id: IdType,
-    pub manager: Option<Manager>,
+    pub watcher: Option<Watcher>,
     pub views: Vec<Box<dyn ViewComponent>>,
     session: Arc<RwLock<Option<Session>>>,
     action_tx: UnboundedSender<Action>,
@@ -49,7 +49,7 @@ impl ColumnComponent {
         });
         Self {
             id,
-            manager: None,
+            watcher: None,
             views: Vec::new(),
             session: Arc::new(RwLock::new(None)),
             action_tx,
@@ -100,7 +100,9 @@ impl Component for ColumnComponent {
                         if let Ok(mut session) = self.session.write() {
                             session.take();
                         }
-                        self.manager = None;
+                        if let Some(watcher) = self.watcher.take() {
+                            watcher.stop();
+                        }
                         self.views = vec![Box::new(LoginComponent::new(self.view_tx.clone()))];
                     }
                     result.map(|action| action.map(|a| Action::View((self.id, a))))
@@ -120,20 +122,14 @@ impl Component for ColumnComponent {
                         }
                     });
                 }
-                let manager = Manager::new(Arc::new(*agent));
-                manager.start();
-                self.manager = Some(manager);
-                return Ok(Some(Action::Transition((id, View::Root))));
-            }
-            Action::Transition((id, view)) if id == self.id => {
-                if let Some(manager) = &self.manager {
-                    if matches!(view, View::Root) {
-                        self.views = vec![Box::new(RootComponent::new(
-                            self.view_tx.clone(),
-                            manager.data.saved_feeds.subscribe(),
-                        ))];
-                    }
-                }
+                let watcher = Watcher::new(Arc::new(*agent));
+                let saved_feed = watcher.saved_feeds(Vec::new());
+                self.watcher = Some(watcher);
+                self.views = vec![Box::new(RootComponent::new(
+                    self.view_tx.clone(),
+                    saved_feed,
+                ))];
+                return Ok(Some(Action::Render));
             }
             _ => {}
         }
