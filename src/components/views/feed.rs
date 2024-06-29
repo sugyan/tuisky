@@ -3,7 +3,6 @@ use super::utils::profile_name;
 use super::ViewComponent;
 use crate::backend::types::SavedFeedValue;
 use crate::backend::Watcher;
-use bsky_sdk::api::app::bsky::embed::record::ViewRecordRefs;
 use bsky_sdk::api::app::bsky::feed::defs::{
     FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
 };
@@ -235,7 +234,7 @@ impl ViewComponent for FeedViewComponent {
             Layout::vertical([Constraint::Length(2), Constraint::Percentage(100)]).split(area);
         f.render_widget(header, layout[0]);
         f.render_stateful_widget(
-            List::new(items).highlight_style(Style::default().reversed()),
+            List::new(items).highlight_style(Style::default().reset().reversed()),
             layout[1],
             &mut self.state,
         );
