@@ -17,6 +17,7 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, List, ListState, Padding, Paragraph};
 use ratatui::Frame;
 use std::sync::Arc;
+use textwrap::Options;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinHandle;
 
@@ -157,23 +158,49 @@ impl ViewComponent for FeedViewComponent {
             }
             if let Some(reply) = &feed_view_post.reply {
                 if let Union::Refs(ReplyRefParentRefs::PostView(post_view)) = &reply.parent {
-                    lines.push(
-                        Line::from(
-                            format!(
-                                "  Reply to {}",
-                                post_view
-                                    .author
-                                    .display_name
-                                    .as_ref()
-                                    .unwrap_or(&post_view.author.handle.as_str().to_string())
+                    lines.push(Line::from(
+                        [
+                            vec![
+                                Span::from("  Reply to ").blue(),
+                                Span::from(
+                                    post_view
+                                        .indexed_at
+                                        .as_ref()
+                                        .with_timezone(&Local)
+                                        .format("%H:%M:%S %z")
+                                        .to_string(),
+                                )
+                                .green(),
+                                Span::from(": "),
+                            ],
+                            profile_name(&post_view.author),
+                        ]
+                        .concat(),
+                    ));
+                    if let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &post_view.record {
+                        lines.extend(
+                            textwrap::wrap(
+                                &record.text,
+                                Options::new(area.width as usize)
+                                    .initial_indent("    ")
+                                    .subsequent_indent("    "),
                             )
-                            .blue(),
-                        )
-                        .blue(),
-                    );
+                            .iter()
+                            .map(|s| Line::from(s.to_string())),
+                        );
+                    }
                 }
             }
-            lines.push(Line::from(format!("  {}", record.text)));
+            lines.extend(
+                textwrap::wrap(
+                    &record.text,
+                    Options::new(area.width as usize)
+                        .initial_indent("  ")
+                        .subsequent_indent("  "),
+                )
+                .iter()
+                .map(|s| Line::from(s.to_string())),
+            );
             if let Some(embed) = &feed_view_post.post.embed {
                 match embed {
                     Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
