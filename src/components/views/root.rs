@@ -1,6 +1,7 @@
-use super::types::Action;
+use super::types::{Action, Transition, View};
 use super::ViewComponent;
 use crate::backend::types::{SavedFeed, SavedFeedValue};
+use crate::backend::Watcher;
 use crate::components::views::types::Data;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -8,20 +9,37 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, List, ListState, Padding};
 use ratatui::{layout::Rect, Frame};
+use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::watch::Receiver;
 use tokio::task::JoinHandle;
 
 pub struct RootComponent {
     items: Vec<SavedFeed>,
     state: ListState,
-    handle: JoinHandle<()>,
+    action_tx: UnboundedSender<Action>,
+    watcher: Arc<Watcher>,
+    handle: Option<JoinHandle<()>>,
 }
 
 impl RootComponent {
-    pub fn new(action_tx: UnboundedSender<Action>, mut rx: Receiver<Vec<SavedFeed>>) -> Self {
-        let tx = action_tx.clone();
-        let handle = tokio::spawn(async move {
+    pub fn new(action_tx: UnboundedSender<Action>, watcher: Arc<Watcher>) -> Self {
+        Self {
+            items: Vec::new(),
+            state: ListState::default(),
+            action_tx,
+            watcher,
+            handle: None,
+        }
+    }
+}
+
+impl ViewComponent for RootComponent {
+    fn activate(&mut self) -> Result<()> {
+        let (tx, mut rx) = (
+            self.action_tx.clone(),
+            self.watcher.saved_feeds(self.items.clone()),
+        );
+        self.handle = Some(tokio::spawn(async move {
             while rx.changed().await.is_ok() {
                 if let Err(e) = tx.send(Action::Update(Box::new(Data::SavedFeeds(
                     rx.borrow_and_update().clone(),
@@ -29,16 +47,15 @@ impl RootComponent {
                     log::error!("failed to send update action: {e}");
                 }
             }
-        });
-        Self {
-            items: Vec::new(),
-            state: ListState::default(),
-            handle,
-        }
+        }));
+        Ok(())
     }
-}
-
-impl ViewComponent for RootComponent {
+    fn deactivate(&mut self) -> Result<()> {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+        Ok(())
+    }
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
         match (key.code, key.modifiers) {
             (KeyCode::Char('n'), KeyModifiers::CONTROL) | (KeyCode::Down, KeyModifiers::NONE) => {
@@ -74,11 +91,15 @@ impl ViewComponent for RootComponent {
             Action::Enter if !self.items.is_empty() => {
                 if let Some(index) = self.state.selected() {
                     if index == self.items.len() {
-                        self.handle.abort();
+                        if let Some(handle) = self.handle.take() {
+                            handle.abort();
+                        }
                         return Ok(Some(Action::Logout));
                     }
                     if let Some(feed) = self.items.get(index) {
-                        // return Ok(Some(Action::ViewFeed(feed.clone())));
+                        return Ok(Some(Action::Transition(Transition::Push(Box::new(
+                            View::Feed(Box::new(feed.value.clone())),
+                        )))));
                     }
                 }
             }

@@ -1,6 +1,8 @@
+pub mod feed;
 pub mod login;
 pub mod root;
 pub mod types;
+mod utils;
 
 use self::types::Action;
 use color_eyre::Result;
@@ -15,6 +17,12 @@ pub trait ViewComponent {
     }
     #[allow(unused_variables)]
     fn init(&mut self, area: Rect) -> Result<()> {
+        Ok(())
+    }
+    fn activate(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn deactivate(&mut self) -> Result<()> {
         Ok(())
     }
     #[allow(unused_variables)]

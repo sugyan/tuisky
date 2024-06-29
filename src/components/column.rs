@@ -1,6 +1,7 @@
+use super::views::feed::FeedViewComponent;
 use super::views::login::LoginComponent;
 use super::views::root::RootComponent;
-use super::views::types::Action as ViewAction;
+use super::views::types::{Action as ViewAction, Transition, View};
 use super::views::ViewComponent;
 use super::Component;
 use crate::backend::Watcher;
@@ -8,7 +9,7 @@ use crate::types::{Action, IdType};
 use bsky_sdk::agent::config::Config;
 use bsky_sdk::api::agent::Session;
 use bsky_sdk::BskyAgent;
-use color_eyre::Result;
+use color_eyre::{eyre, Result};
 use crossterm::event::KeyEvent;
 use ratatui::{layout::Rect, Frame};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -19,7 +20,7 @@ static COUNTER: AtomicU32 = AtomicU32::new(0);
 
 pub struct ColumnComponent {
     pub id: IdType,
-    pub watcher: Option<Watcher>,
+    pub watcher: Option<Arc<Watcher>>,
     pub views: Vec<Box<dyn ViewComponent>>,
     session: Arc<RwLock<Option<Session>>>,
     action_tx: UnboundedSender<Action>,
@@ -76,6 +77,49 @@ impl ColumnComponent {
             format!(" id: {} ", self.id)
         }
     }
+    fn transition(&mut self, transition: &Transition) -> Result<Option<Action>> {
+        match transition {
+            Transition::Push(view) => {
+                if let Some(current) = self.views.last_mut() {
+                    current.deactivate()?;
+                }
+                let mut next = self.view(view)?;
+                next.as_mut().activate()?;
+                self.views.push(next);
+            }
+            Transition::Pop => {
+                if let Some(mut view) = self.views.pop() {
+                    view.deactivate()?;
+                }
+                if let Some(current) = self.views.last_mut() {
+                    current.activate()?;
+                }
+            }
+            Transition::Replace(view) => {
+                if let Some(mut current) = self.views.pop() {
+                    current.deactivate()?;
+                }
+                let mut next = self.view(view)?;
+                next.as_mut().activate()?;
+                self.views.push(next);
+            }
+        }
+        Ok(Some(Action::Render))
+    }
+    fn view(&self, view: &View) -> Result<Box<dyn ViewComponent>> {
+        let watcher = self
+            .watcher
+            .as_ref()
+            .ok_or_else(|| eyre::eyre!("watcher not initialized"))?;
+        Ok(match view {
+            View::Root => Box::new(RootComponent::new(self.view_tx.clone(), watcher.clone())),
+            View::Feed(feed) => Box::new(FeedViewComponent::new(
+                self.view_tx.clone(),
+                watcher.clone(),
+                feed.as_ref().clone(),
+            )),
+        })
+    }
 }
 
 impl Component for ColumnComponent {
@@ -96,14 +140,20 @@ impl Component for ColumnComponent {
             Action::View((id, view_action)) if id == self.id => {
                 return if let Some(view) = self.views.last_mut() {
                     let result = view.update(view_action);
-                    if let Ok(Some(ViewAction::Logout)) = result {
-                        if let Ok(mut session) = self.session.write() {
-                            session.take();
+                    match &result {
+                        Ok(Some(ViewAction::Logout)) => {
+                            if let Ok(mut session) = self.session.write() {
+                                session.take();
+                            }
+                            if let Some(watcher) = self.watcher.take() {
+                                watcher.stop();
+                            }
+                            self.views = vec![Box::new(LoginComponent::new(self.view_tx.clone()))];
                         }
-                        if let Some(watcher) = self.watcher.take() {
-                            watcher.stop();
+                        Ok(Some(ViewAction::Transition(transition))) => {
+                            return self.transition(transition);
                         }
-                        self.views = vec![Box::new(LoginComponent::new(self.view_tx.clone()))];
+                        _ => {}
                     }
                     result.map(|action| action.map(|a| Action::View((self.id, a))))
                 } else {
@@ -122,14 +172,8 @@ impl Component for ColumnComponent {
                         }
                     });
                 }
-                let watcher = Watcher::new(Arc::new(*agent));
-                let saved_feed = watcher.saved_feeds(Vec::new());
-                self.watcher = Some(watcher);
-                self.views = vec![Box::new(RootComponent::new(
-                    self.view_tx.clone(),
-                    saved_feed,
-                ))];
-                return Ok(Some(Action::Render));
+                self.watcher = Some(Arc::new(Watcher::new(Arc::new(*agent))));
+                return self.transition(&Transition::Replace(Box::new(View::Root)));
             }
             _ => {}
         }

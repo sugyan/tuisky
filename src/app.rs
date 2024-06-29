@@ -77,7 +77,7 @@ impl App {
                             // split horizontally, the right side is for log view
                             let layout = Layout::default()
                                 .direction(ratatui::layout::Direction::Horizontal)
-                                .constraints([Constraint::Fill(1), Constraint::Max(75)])
+                                .constraints([Constraint::Percentage(100), Constraint::Min(75)])
                                 .split(f.size());
                             // render main components to the left side
                             if let Err(e) = main_component.draw(f, layout[0]) {
