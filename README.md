@@ -34,3 +34,11 @@ Options:
   -h, --help               Print help
   -V, --version            Print version
 ```
+
+### Basic key bindings
+
+- `Ctrl + c` or `Ctrl + q`: Quit
+- `Ctrl + o`: Focus next column
+- `Ctrl + n`: Next item
+- `Ctrl + p`: Prev item
+- `Enter`: Select item
