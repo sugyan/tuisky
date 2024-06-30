@@ -10,7 +10,7 @@ use bsky_sdk::api::records::{KnownRecord, Record};
 use bsky_sdk::api::types::Union;
 use chrono::Local;
 use color_eyre::Result;
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
