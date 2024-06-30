@@ -1,6 +1,5 @@
 use super::types::Action;
 use super::ViewComponent;
-use bsky_sdk::api::agent::Session;
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -12,12 +11,6 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc::UnboundedSender;
 use tui_prompts::{State, TextPrompt, TextRenderStyle, TextState};
 
-#[derive(Debug)]
-enum LoginResult {
-    Success(Session),
-    Failure(String),
-}
-
 enum FocusField {
     Identifier,
     Password,
@@ -28,7 +21,7 @@ pub struct LoginComponent {
     identifier: TextState<'static>,
     password: TextState<'static>,
     current: FocusField,
-    result: Arc<RwLock<Option<LoginResult>>>,
+    error_message: Arc<RwLock<Option<String>>>,
     action_tx: UnboundedSender<Action>,
 }
 
@@ -38,7 +31,7 @@ impl LoginComponent {
             identifier: TextState::new(),
             password: TextState::new(),
             current: FocusField::Identifier,
-            result: Arc::new(RwLock::new(None)),
+            error_message: Arc::new(RwLock::new(None)),
             action_tx,
         }
     }
@@ -52,7 +45,7 @@ impl LoginComponent {
     fn login(&self) -> Result<()> {
         let identifier = self.identifier.value().to_string();
         let password = self.password.value().to_string();
-        let result = Arc::clone(&self.result);
+        let error_message = Arc::clone(&self.error_message);
         let action_tx = self.action_tx.clone();
         tokio::spawn(async move {
             let Ok(agent) = BskyAgent::builder().build().await else {
@@ -64,16 +57,16 @@ impl LoginComponent {
                     if let Err(e) = action_tx.send(Action::Login(Box::new(agent))) {
                         log::error!("failed to send login event: {e}");
                     }
-                    if let Ok(mut result) = result.write() {
-                        result.replace(LoginResult::Success(session));
-                    }
                 }
                 Err(e) => {
                     log::warn!("login failed: {e}");
-                    if let Ok(mut result) = result.write() {
-                        result.replace(LoginResult::Failure(e.to_string()));
+                    if let Ok(mut message) = error_message.write() {
+                        message.replace(e.to_string());
                     }
                 }
+            }
+            if let Err(e) = action_tx.send(Action::Render) {
+                log::error!("failed to send render event: {e}");
             }
         });
         Ok(())
@@ -92,7 +85,7 @@ impl ViewComponent for LoginComponent {
                 Ok(if key.code == KeyCode::Enter {
                     Some(Action::Enter)
                 } else {
-                    None
+                    Some(Action::Render)
                 })
             }
         }
@@ -105,6 +98,7 @@ impl ViewComponent for LoginComponent {
                     FocusField::Password => FocusField::Identifier,
                     FocusField::None => FocusField::Identifier,
                 };
+                return Ok(Some(Action::Render));
             }
             Action::Enter => {
                 if self.identifier.is_finished() && self.password.is_finished() {
@@ -113,6 +107,7 @@ impl ViewComponent for LoginComponent {
                 } else {
                     return Ok(Some(Action::NextInput));
                 }
+                return Ok(Some(Action::Render));
             }
             _ => {}
         }
@@ -143,20 +138,14 @@ impl ViewComponent for LoginComponent {
         }
         f.render_stateful_widget(identifier, layout[0], &mut self.identifier);
         f.render_stateful_widget(password, layout[2], &mut self.password);
-        if let Ok(result) = self.result.read() {
-            if let Some(event) = result.as_ref() {
-                let paragraph = match event {
-                    LoginResult::Success(session) => Paragraph::new(format!(
-                        "Successfully logged in as {}",
-                        session.handle.as_ref()
-                    ))
-                    .style(Style::default().green())
-                    .wrap(Wrap::default()),
-                    LoginResult::Failure(e) => Paragraph::new(e.as_str())
+        if let Ok(message) = self.error_message.read() {
+            if let Some(s) = message.as_ref() {
+                f.render_widget(
+                    Paragraph::new(s.as_str())
                         .style(Style::default().red())
                         .wrap(Wrap::default()),
-                };
-                f.render_widget(paragraph, layout[4]);
+                    layout[4],
+                );
             }
         }
         Ok(())

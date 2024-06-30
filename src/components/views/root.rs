@@ -111,6 +111,7 @@ impl ViewComponent for RootComponent {
                 if self.state.selected().is_none() && !self.items.is_empty() {
                     self.state.select(Some(0));
                 }
+                return Ok(Some(Action::Render));
             }
             _ => {}
         }

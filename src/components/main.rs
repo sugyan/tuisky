@@ -120,6 +120,7 @@ impl Component for MainComponent {
             Action::NextFocus => {
                 self.state.selected =
                     Some(self.state.selected.map_or(0, |s| s + 1) % self.columns.len());
+                return Ok(Some(Action::Render));
             }
             _ => {
                 for column in self.columns.iter_mut() {

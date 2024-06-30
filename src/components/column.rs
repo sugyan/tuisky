@@ -138,6 +138,9 @@ impl Component for ColumnComponent {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::View((id, view_action)) if id == self.id => {
+                if let ViewAction::Render = view_action {
+                    return Ok(Some(Action::Render));
+                }
                 return if let Some(view) = self.views.last_mut() {
                     let result = view.update(view_action);
                     match &result {
@@ -149,6 +152,7 @@ impl Component for ColumnComponent {
                                 watcher.stop();
                             }
                             self.views = vec![Box::new(LoginComponent::new(self.view_tx.clone()))];
+                            return Ok(Some(Action::Render));
                         }
                         Ok(Some(ViewAction::Transition(transition))) => {
                             return self.transition(transition);

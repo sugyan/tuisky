@@ -13,15 +13,15 @@ use tokio::sync::mpsc;
 use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget};
 
 pub struct App {
-    frame_rate: f64,
+    dev: bool,
     components: Vec<Box<dyn Component>>,
 }
 
 impl App {
-    pub fn new(frame_rate: f64) -> Self {
-        log::debug!("App::new(frame_rate: {frame_rate})");
+    pub fn new(dev: bool) -> Self {
+        log::debug!("App::new(dev: {dev})");
         Self {
-            frame_rate,
+            dev,
             components: Vec::new(),
         }
     }
@@ -31,7 +31,7 @@ impl App {
         let terminal = Terminal::new(CrosstermBackend::new(io()))?;
         log::debug!("terminal size: {}", terminal.size()?);
         let mut tui = Tui::new(terminal);
-        tui.start(self.frame_rate)?;
+        tui.start(if self.dev { Some(10.0) } else { None })?;
 
         let mut main_component = MainComponent::new(action_tx.clone());
 
@@ -45,6 +45,10 @@ impl App {
             component.init(tui.size()?)?;
         }
 
+        let mut constraints = vec![Constraint::Percentage(100)];
+        if self.dev {
+            constraints.push(Constraint::Min(75));
+        }
         let mut should_quit = false;
         loop {
             if let Some(e) = tui.next_event().await {
@@ -75,10 +79,7 @@ impl App {
                     Action::Render => {
                         tui.draw(|f| {
                             // split horizontally, the right side is for log view
-                            let layout = Layout::default()
-                                .direction(ratatui::layout::Direction::Horizontal)
-                                .constraints([Constraint::Percentage(100), Constraint::Min(75)])
-                                .split(f.size());
+                            let layout = Layout::horizontal(&constraints).split(f.size());
                             // render main components to the left side
                             if let Err(e) = main_component.draw(f, layout[0]) {
                                 if let Err(e) =
@@ -88,16 +89,18 @@ impl App {
                                 }
                             }
                             // render log components to the right side
-                            f.render_widget(
-                                TuiLoggerWidget::default()
-                                    .block(Block::bordered().title("log"))
-                                    .output_level(Some(TuiLoggerLevelOutput::Abbreviated))
-                                    .style_error(Style::default().fg(Color::Red))
-                                    .style_warn(Style::default().fg(Color::Yellow))
-                                    .style_info(Style::default().fg(Color::Green))
-                                    .style_debug(Style::default().fg(Color::Gray)),
-                                layout[1],
-                            );
+                            if self.dev {
+                                f.render_widget(
+                                    TuiLoggerWidget::default()
+                                        .block(Block::bordered().title("log"))
+                                        .output_level(Some(TuiLoggerLevelOutput::Abbreviated))
+                                        .style_error(Style::default().fg(Color::Red))
+                                        .style_warn(Style::default().fg(Color::Yellow))
+                                        .style_info(Style::default().fg(Color::Green))
+                                        .style_debug(Style::default().fg(Color::Gray)),
+                                    layout[1],
+                                );
+                            }
                             // other components?
                             for component in self.components.iter_mut() {
                                 if let Err(e) = component.draw(f, layout[0]) {

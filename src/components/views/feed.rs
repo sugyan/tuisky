@@ -109,6 +109,7 @@ impl ViewComponent for FeedViewComponent {
                 };
                 log::info!("update feed views ({} items)", feed_views.len());
                 self.items.clone_from(feed_views);
+                return Ok(Some(Action::Render));
             }
             _ => {}
         }
