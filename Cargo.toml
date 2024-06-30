@@ -1,7 +1,14 @@
 [package]
 name = "tuisky"
-version = "0.1.0"
+version = "0.0.1"
+authors = ["sugyan <sugi1982+github@gmail.com>"]
 edition = "2021"
+rust-version = "1.74"
+description = "TUI application for Bluesky"
+readme = "README.md"
+repository = "https://github.com/sugyan/tuisky"
+license = "MIT"
+keywords = ["tui", "atproto", "bluesky", "atrium"]
 
 [dependencies]
 bsky-sdk = "0.1.3"
@@ -26,5 +33,8 @@ tui-logger = "0.11.2"
 tui-prompts = "0.3.13"
 
 [patch.crates-io]
-bsky-sdk = { path = "../atrium/bsky-sdk" }
 tui-logger = { git = "https://github.com/gin66/tui-logger", rev = "775c759c89a808b6f479b869c533d33b18fe5f44" }
+
+[[bin]]
+name = "tuisky"
+path = "src/bin/main.rs"
