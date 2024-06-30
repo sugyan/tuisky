@@ -30,14 +30,16 @@ struct State {
 }
 
 pub struct MainComponent {
+    num_columns: usize,
     columns: Vec<ColumnComponent>,
     state: State,
     action_tx: UnboundedSender<Action>,
 }
 
 impl MainComponent {
-    pub fn new(action_tx: UnboundedSender<Action>) -> Self {
+    pub fn new(num_columns: usize, action_tx: UnboundedSender<Action>) -> Self {
         Self {
+            num_columns,
             columns: Vec::new(),
             state: State { selected: None },
             action_tx,
@@ -82,14 +84,13 @@ impl MainComponent {
 
 impl Component for MainComponent {
     fn init(&mut self, rect: Rect) -> Result<()> {
-        let columns = 2; // TODO
         let appdata = if let Ok(appdata) = Self::load() {
             appdata
         } else {
             log::warn!("failed to load appdata, using default");
             AppData::default()
         };
-        for i in 0..columns {
+        for i in 0..self.num_columns {
             let action_tx = self.action_tx.clone();
             let mut column = ColumnComponent::new(action_tx.clone());
             if let Some(config) = appdata.views.get(i).and_then(|view| view.agent.as_ref()) {

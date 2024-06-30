@@ -50,7 +50,7 @@ where
             let mut render_interval = time::interval(if let Some(frame_rate) = frame_rate {
                 Duration::from_secs_f64(1.0 / frame_rate)
             } else {
-                Duration::from_secs(u64::MAX)
+                Duration::from_secs(1_000_000_000) // TODO
             });
             let mut tick = 0;
             loop {

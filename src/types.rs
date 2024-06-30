@@ -33,9 +33,6 @@ impl Debug for Action {
 }
 
 #[derive(Debug, Clone)]
-pub enum View {}
-
-#[derive(Debug, Clone)]
 pub enum Event {
     Tick(usize),
     Render,

@@ -7,6 +7,10 @@ use tuisky::utils::initialize_panic_handler;
 #[command(version, about, long_about = None)]
 /// TUI Client for Bluesky.
 struct Args {
+    /// Maximum number of columns to display.
+    /// The number of columns will be determined by the terminal width.
+    #[arg(short, long)]
+    columns: Option<usize>,
     /// Development mode
     #[arg(short, long)]
     dev: bool,
@@ -23,7 +27,7 @@ async fn main() -> Result<()> {
 
     initialize_panic_handler()?;
 
-    let mut app = App::new(args.dev);
+    let mut app = App::new(args.columns, args.dev);
     app.run().await?;
 
     Ok(())

@@ -13,14 +13,16 @@ use tokio::sync::mpsc;
 use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget};
 
 pub struct App {
+    columns: Option<usize>,
     dev: bool,
     components: Vec<Box<dyn Component>>,
 }
 
 impl App {
-    pub fn new(dev: bool) -> Self {
+    pub fn new(columns: Option<usize>, dev: bool) -> Self {
         log::debug!("App::new(dev: {dev})");
         Self {
+            columns,
             dev,
             components: Vec::new(),
         }
@@ -33,7 +35,11 @@ impl App {
         let mut tui = Tui::new(terminal);
         tui.start(if self.dev { Some(10.0) } else { None })?;
 
-        let mut main_component = MainComponent::new(action_tx.clone());
+        let auto_num = usize::from(tui.size()?.width - if self.dev { 75 } else { 0 }) / 80;
+        let mut main_component = MainComponent::new(
+            self.columns.map_or(auto_num, |n| n.min(auto_num)),
+            action_tx.clone(),
+        );
 
         main_component.register_action_handler(action_tx.clone())?;
         for component in self.components.iter_mut() {
