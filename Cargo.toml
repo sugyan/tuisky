@@ -18,6 +18,7 @@ color-eyre = "0.6.3"
 crossterm = { version = "0.27.0", features = ["event-stream"] }
 directories = "5.0.1"
 futures-util = "0.3.30"
+indexmap = "2.2.6"
 log = "0.4.21"
 ratatui = "0.27.0"
 serde = { version = "1.0.203", features = ["derive"] }
@@ -31,6 +32,9 @@ tokio = { version = "1.38.0", features = [
 ] }
 tui-logger = "0.11.2"
 tui-prompts = "0.3.13"
+
+[dev-dependencies]
+ipld-core = "0.4.0"
 
 [patch.crates-io]
 tui-logger = { git = "https://github.com/gin66/tui-logger", rev = "775c759c89a808b6f479b869c533d33b18fe5f44" }

@@ -1,5 +1,8 @@
 use crate::backend::types::{SavedFeed, SavedFeedValue};
-use bsky_sdk::{api::app::bsky::feed::defs::FeedViewPost, BskyAgent};
+use bsky_sdk::api::app::bsky::feed::defs::FeedViewPost;
+use bsky_sdk::api::types::string::Cid;
+use bsky_sdk::BskyAgent;
+use indexmap::IndexMap;
 use std::fmt::{Debug, Formatter, Result};
 
 #[derive(Clone)]
@@ -38,7 +41,7 @@ impl Debug for Action {
 #[derive(Debug, Clone)]
 pub enum Data {
     SavedFeeds(Vec<SavedFeed>),
-    FeedViews(Vec<FeedViewPost>),
+    FeedViews(IndexMap<Cid, FeedViewPost>),
 }
 
 #[derive(Debug, Clone)]

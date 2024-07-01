@@ -8,9 +8,11 @@ use bsky_sdk::api::app::bsky::feed::defs::{
     FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
 };
 use bsky_sdk::api::records::{KnownRecord, Record};
+use bsky_sdk::api::types::string::Cid;
 use bsky_sdk::api::types::Union;
 use chrono::Local;
 use color_eyre::Result;
+use indexmap::IndexMap;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
@@ -23,7 +25,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinHandle;
 
 pub struct FeedViewComponent {
-    items: Vec<FeedViewPost>,
+    items: IndexMap<Cid, FeedViewPost>,
     state: ListState,
     action_tx: UnboundedSender<Action>,
     watcher: Arc<Watcher>,
@@ -38,7 +40,7 @@ impl FeedViewComponent {
         feed: SavedFeedValue,
     ) -> Self {
         Self {
-            items: Vec::new(),
+            items: IndexMap::new(),
             state: ListState::default(),
             action_tx,
             watcher,
@@ -52,7 +54,7 @@ impl ViewComponent for FeedViewComponent {
     fn activate(&mut self) -> Result<()> {
         let (tx, mut rx) = (
             self.action_tx.clone(),
-            self.watcher.feed_views(Vec::new(), &self.feed),
+            self.watcher.feed_views(IndexMap::new(), &self.feed),
         );
         self.handle = Some(tokio::spawn(async move {
             while rx.changed().await.is_ok() {
@@ -105,11 +107,22 @@ impl ViewComponent for FeedViewComponent {
             }
             Action::Back => return Ok(Some(Action::Transition(Transition::Pop))),
             Action::Update(data) => {
-                let Data::FeedViews(feed_views) = data.as_ref() else {
+                let Data::FeedViews(feed_map) = data.as_ref() else {
                     return Ok(None);
                 };
-                log::info!("update feed views ({} items)", feed_views.len());
-                self.items.clone_from(feed_views);
+                log::info!("update feed views ({} items)", feed_map.len());
+                let select = if let Some(cid) = self
+                    .state
+                    .selected()
+                    .and_then(|i| self.items.get_index(self.items.len() - 1 - i))
+                    .map(|(cid, _)| cid)
+                {
+                    self.items.get_index_of(cid).map(|i| feed_map.len() - 1 - i)
+                } else {
+                    None
+                };
+                self.items.clone_from(feed_map);
+                self.state.select(select);
                 return Ok(Some(Action::Render));
             }
             _ => {}
@@ -118,7 +131,7 @@ impl ViewComponent for FeedViewComponent {
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
         let mut items = Vec::new();
-        for feed_view_post in self.items.iter().rev() {
+        for feed_view_post in self.items.values().rev() {
             let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &feed_view_post.post.record
             else {
                 continue;
@@ -308,7 +321,9 @@ impl ViewComponent for FeedViewComponent {
             Layout::vertical([Constraint::Length(2), Constraint::Percentage(100)]).split(area);
         f.render_widget(header, layout[0]);
         f.render_stateful_widget(
-            List::new(items).highlight_style(Style::default().reset().reversed()),
+            List::new(items)
+                .highlight_style(Style::default().reset().reversed())
+                .block(Block::default().padding(Padding::horizontal(1))),
             layout[1],
             &mut self.state,
         );
