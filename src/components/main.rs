@@ -1,6 +1,7 @@
 use super::column::ColumnComponent;
 use super::Component;
 use crate::types::Action;
+use crate::utils::get_data_dir;
 use bsky_sdk::agent::config::Config;
 use color_eyre::eyre::eyre;
 use color_eyre::Result;
@@ -69,16 +70,9 @@ impl MainComponent {
         Ok(appdata)
     }
     fn appdata_path() -> Result<PathBuf> {
-        let data_dir = Self::get_data_dir()?;
+        let data_dir = get_data_dir()?;
         create_dir_all(&data_dir)?;
         Ok(data_dir.join("appdata.json"))
-    }
-    fn get_data_dir() -> Result<PathBuf> {
-        if let Some(proj_dir) = ProjectDirs::from("com", "sugyan", "tuisky") {
-            Ok(proj_dir.data_dir().to_path_buf())
-        } else {
-            Err(eyre!("failed to get project directories"))
-        }
     }
 }
 

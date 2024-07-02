@@ -1,5 +1,6 @@
 use crate::components::main::MainComponent;
 use crate::components::Component;
+use crate::config::Config;
 use crate::tui::{io, Tui};
 use crate::types::{Action, Event};
 use color_eyre::Result;
@@ -13,17 +14,15 @@ use tokio::sync::mpsc;
 use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget};
 
 pub struct App {
-    columns: Option<usize>,
-    dev: bool,
+    config: Config,
     components: Vec<Box<dyn Component>>,
 }
 
 impl App {
-    pub fn new(columns: Option<usize>, dev: bool) -> Self {
-        log::debug!("App::new(dev: {dev})");
+    pub fn new(config: Config) -> Self {
+        log::debug!("App::new({config:?})");
         Self {
-            columns,
-            dev,
+            config,
             components: Vec::new(),
         }
     }
@@ -33,11 +32,13 @@ impl App {
         let terminal = Terminal::new(CrosstermBackend::new(io()))?;
         log::debug!("terminal size: {}", terminal.size()?);
         let mut tui = Tui::new(terminal);
-        tui.start(if self.dev { Some(10.0) } else { None })?;
+        tui.start(if self.config.dev { Some(10.0) } else { None })?;
 
-        let auto_num = usize::from(tui.size()?.width - if self.dev { 75 } else { 0 }) / 80;
+        let auto_num = usize::from(tui.size()?.width - if self.config.dev { 75 } else { 0 }) / 80;
         let mut main_component = MainComponent::new(
-            self.columns.map_or(auto_num, |n| n.min(auto_num)),
+            self.config
+                .num_columns
+                .map_or(auto_num, |n| n.min(auto_num)),
             action_tx.clone(),
         );
 
@@ -52,7 +53,7 @@ impl App {
         }
 
         let mut constraints = vec![Constraint::Percentage(100)];
-        if self.dev {
+        if self.config.dev {
             constraints.push(Constraint::Min(75));
         }
         let mut should_quit = false;
@@ -95,7 +96,7 @@ impl App {
                                 }
                             }
                             // render log components to the right side
-                            if self.dev {
+                            if self.config.dev {
                                 f.render_widget(
                                     TuiLoggerWidget::default()
                                         .block(Block::bordered().title("log"))

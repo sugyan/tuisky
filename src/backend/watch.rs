@@ -34,13 +34,10 @@ impl Watcher {
             }));
             let (agent, tx) = (agent.clone(), preferences.clone());
             handles.push(tokio::spawn(async move {
-                let mut interval = time::interval(Duration::from_secs(1));
                 let mut preferences_interval = time::interval(Duration::from_secs(60));
                 loop {
-                    let tick = interval.tick();
                     let preferences_tick = preferences_interval.tick();
                     tokio::select! {
-                        _ = tick => {}
                         _ = preferences_tick => {
                             if let Ok(prefs) = agent.get_preferences(true).await {
                                 if let Err(e) = tx.send(prefs.clone()) {

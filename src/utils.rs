@@ -1,8 +1,9 @@
 use crate::tui;
-use color_eyre::config::HookBuilder;
-use std::panic;
+use color_eyre::{config::HookBuilder, eyre, Result};
+use directories::ProjectDirs;
+use std::{panic, path::PathBuf};
 
-pub fn initialize_panic_handler() -> color_eyre::Result<()> {
+pub fn initialize_panic_handler() -> Result<()> {
     let (panic_hook, eyre_hook) = HookBuilder::default().into_hooks();
     eyre_hook.install()?;
 
@@ -12,4 +13,17 @@ pub fn initialize_panic_handler() -> color_eyre::Result<()> {
         panic_hook(panic_info);
     }));
     Ok(())
+}
+
+pub fn get_data_dir() -> Result<PathBuf> {
+    Ok(project_dirs()?.data_dir().to_path_buf())
+}
+
+pub fn get_config_dir() -> Result<PathBuf> {
+    Ok(project_dirs()?.config_dir().to_path_buf())
+}
+
+fn project_dirs() -> Result<ProjectDirs> {
+    ProjectDirs::from("com", "sugyan", "tuisky")
+        .ok_or_else(|| eyre::eyre!("failed to get project directories"))
 }

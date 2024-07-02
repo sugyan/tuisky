@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "properties": {
+    "dev": {
+      "type": "boolean"
+    },
+    "num_columns": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "keybindings": {
+      "$ref": "#/$defs/keybindings"
+    },
+    "watcher": {
+      "$ref": "#/$defs/watcher"
+    }
+  },
+  "required": [],
+  "$defs": {
+    "keybindings": {
+      "type": "object",
+      "properties": {
+        "global": {
+          "type": "object",
+          "patternProperties": {
+            "^((Ctrl|Shift)\\+[a-z]|[ -@\\[-~])$": {
+              "type": "string",
+              "enum": [
+                "NextFocus",
+                "PrevFocus",
+                "Help",
+                "Quit"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "column": {
+          "type": "object",
+          "patternProperties": {
+            "^((Ctrl|Shift)\\+[a-z]|[ -@\\[-~])$": {
+              "type": "string",
+              "enum": [
+                "NextItem",
+                "PrevItem",
+                "NextInput",
+                "PrevInput",
+                "Enter",
+                "Back"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "watcher": {
+      "type": "object",
+      "properties": {
+        "intervals": {
+          "$ref": "#/$defs/watcher/intervals"
+        }
+      },
+      "intervals": {
+        "type": "object",
+        "properties": {
+          "preferences": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "feed_view_posts": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "additionalProperties": false
+    }
+  }
+}
