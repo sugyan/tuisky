@@ -2,12 +2,12 @@ dev = true
 num_columns = 2
 
 [keybindings.global]
-"Ctrl+c" = "Quit"
+Ctrl-c = "Quit"
 "?" = "Help"
 
 [keybindings.column]
-"Ctrl+n" = "NextItem"
-"Ctrl+p" = "PrevItem"
+Ctrl-n = "NextItem"
+Ctrl-p = "PrevItem"
 
 [watcher.intervals]
 feed_view_posts = 20

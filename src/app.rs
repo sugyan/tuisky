@@ -29,33 +29,37 @@ impl App {
     pub async fn run(&mut self) -> Result<()> {
         let (action_tx, mut action_rx) = mpsc::unbounded_channel();
 
+        // Setup terminal
         let terminal = Terminal::new(CrosstermBackend::new(io()))?;
         log::debug!("terminal size: {}", terminal.size()?);
         let mut tui = Tui::new(terminal);
         tui.start(if self.config.dev { Some(10.0) } else { None })?;
 
-        let auto_num = usize::from(tui.size()?.width - if self.config.dev { 75 } else { 0 }) / 80;
-        let mut main_component = MainComponent::new(
-            self.config
-                .num_columns
-                .map_or(auto_num, |n| n.min(auto_num)),
-            action_tx.clone(),
-        );
-
-        main_component.register_action_handler(action_tx.clone())?;
-        for component in self.components.iter_mut() {
-            component.register_action_handler(action_tx.clone())?;
-        }
-        // TODO: config handler?
-        main_component.init(tui.size()?)?;
-        for component in self.components.iter_mut() {
-            component.init(tui.size()?)?;
-        }
-
+        // Prepare layout constraints
         let mut constraints = vec![Constraint::Percentage(100)];
         if self.config.dev {
             constraints.push(Constraint::Min(75));
         }
+        let layout = Layout::horizontal(&constraints).split(tui.size()?);
+
+        // Create main component
+        let mut main_component = MainComponent::new(self.config.clone(), action_tx.clone());
+
+        // Setup components
+        main_component.register_action_handler(action_tx.clone())?;
+        for component in self.components.iter_mut() {
+            component.register_action_handler(action_tx.clone())?;
+        }
+        main_component.register_config_handler(self.config.clone())?;
+        for component in self.components.iter_mut() {
+            component.register_config_handler(self.config.clone())?;
+        }
+        main_component.init(layout[0])?;
+        for component in self.components.iter_mut() {
+            component.init(tui.size()?)?;
+        }
+
+        // Main loop
         let mut should_quit = false;
         loop {
             if let Some(e) = tui.next_event().await {
@@ -153,11 +157,12 @@ impl App {
         None
     }
     fn handle_key_events(&mut self, key_event: KeyEvent) -> Option<Action> {
-        if matches!(key_event.code, KeyCode::Char('c' | 'q'))
-            && key_event.modifiers == KeyModifiers::CONTROL
-        {
-            return Some(Action::Quit);
+        if let Some(action) = self.config.keybindings.global.get(&key_event.into()) {
+            Some(action.into())
+        } else if key_event == KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL) {
+            Some(Action::Quit)
+        } else {
+            None
         }
-        None
     }
 }

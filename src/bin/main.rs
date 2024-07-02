@@ -57,8 +57,5 @@ async fn main() -> Result<()> {
 
     initialize_panic_handler()?;
 
-    let mut app = App::new(config);
-    app.run().await?;
-
-    Ok(())
+    App::new(config).run().await
 }

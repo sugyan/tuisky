@@ -1,23 +1,37 @@
-use crossterm::event::{KeyCode, KeyModifiers};
+use crate::types::Action as AppAction;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Config {
-    pub keybindings: Option<Keybindings>,
+    #[serde(default)]
+    pub keybindings: Keybindings,
     pub num_columns: Option<usize>,
     #[serde(default)]
     pub dev: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Keybindings {
-    global: HashMap<Key, GlobalAction>,
-    column: HashMap<Key, ColumnAction>,
+    pub global: HashMap<Key, GlobalAction>,
+    pub column: HashMap<Key, ColumnAction>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-struct Key(KeyCode, Option<KeyModifiers>);
+pub struct Key(KeyCode, Option<KeyModifiers>);
+
+impl From<KeyEvent> for Key {
+    fn from(event: KeyEvent) -> Self {
+        Self(
+            event.code,
+            match event.modifiers {
+                KeyModifiers::CONTROL | KeyModifiers::SHIFT => Some(event.modifiers),
+                _ => None,
+            },
+        )
+    }
+}
 
 impl Serialize for Key {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -32,7 +46,7 @@ impl Serialize for Key {
                         KeyModifiers::SHIFT => "Shift",
                         _ => return Err(serde::ser::Error::custom("invalid key modifier")),
                     };
-                    format!("{modifier}+{c}").serialize(serializer)
+                    format!("{modifier}-{c}").serialize(serializer)
                 }
                 None => c.to_string().serialize(serializer),
             },
@@ -47,7 +61,7 @@ impl<'de> Deserialize<'de> for Key {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        if let Some((modifier, code)) = s.split_once('+') {
+        if let Some((modifier, code)) = s.split_once('-') {
             let mut chars = code.chars();
             if let (Some(c), None) = (chars.next(), chars.next()) {
                 Ok(Self(
@@ -73,15 +87,26 @@ impl<'de> Deserialize<'de> for Key {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-enum GlobalAction {
+pub enum GlobalAction {
     NextFocus,
     PrevFocus,
     Help,
     Quit,
 }
 
+impl From<&GlobalAction> for AppAction {
+    fn from(action: &GlobalAction) -> Self {
+        match action {
+            GlobalAction::NextFocus => AppAction::NextFocus,
+            GlobalAction::PrevFocus => AppAction::PrevFocus,
+            GlobalAction::Help => AppAction::Help,
+            GlobalAction::Quit => AppAction::Quit,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-enum ColumnAction {
+pub enum ColumnAction {
     NextItem,
     PrevItem,
     NextInput,
@@ -95,15 +120,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn deserialize_empty() {
+        let config = toml::from_str::<Config>("").expect("failed to deserialize config");
+        assert_eq!(config, Config::default());
+    }
+
+    #[test]
     fn deserialize() {
         let input = r#"
 [keybindings.global]
-"Ctrl+c" = "Quit"
+Ctrl-c = "Quit"
 "?" = "Help"
 
 [keybindings.column]
-"Ctrl+n" = "NextItem"
-"Ctrl+p" = "PrevItem"
+Ctrl-n = "NextItem"
+Ctrl-p = "PrevItem"
 
 [watcher.intervals]
 feed_view_posts = 20
@@ -112,7 +143,7 @@ feed_view_posts = 20
         assert_eq!(
             config,
             Config {
-                keybindings: Some(Keybindings {
+                keybindings: Keybindings {
                     global: HashMap::from_iter([
                         (
                             Key(KeyCode::Char('c'), Some(KeyModifiers::CONTROL)),
@@ -130,7 +161,7 @@ feed_view_posts = 20
                             ColumnAction::PrevItem
                         )
                     ]),
-                }),
+                },
                 num_columns: None,
                 dev: false,
             }
@@ -140,7 +171,7 @@ feed_view_posts = 20
     #[test]
     fn serialize() {
         let config = Config {
-            keybindings: Some(Keybindings {
+            keybindings: Keybindings {
                 global: HashMap::from_iter([
                     (
                         Key(KeyCode::Char('c'), Some(KeyModifiers::CONTROL)),
@@ -148,17 +179,8 @@ feed_view_posts = 20
                     ),
                     (Key(KeyCode::Char('?'), None), GlobalAction::Help),
                 ]),
-                column: HashMap::from_iter([
-                    (
-                        Key(KeyCode::Char('n'), Some(KeyModifiers::CONTROL)),
-                        ColumnAction::NextItem,
-                    ),
-                    (
-                        Key(KeyCode::Char('p'), Some(KeyModifiers::CONTROL)),
-                        ColumnAction::PrevItem,
-                    ),
-                ]),
-            }),
+                column: HashMap::new(),
+            },
             num_columns: None,
             dev: true,
         };

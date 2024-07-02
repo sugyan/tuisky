@@ -1,8 +1,9 @@
 use super::column::ColumnComponent;
 use super::Component;
+use crate::config::Config;
 use crate::types::Action;
 use crate::utils::get_data_dir;
-use bsky_sdk::agent::config::Config;
+use bsky_sdk::agent::config::Config as AgentConfig;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
@@ -20,7 +21,7 @@ struct AppData {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct ViewData {
-    agent: Option<Config>,
+    agent: Option<AgentConfig>,
 }
 
 #[derive(Default)]
@@ -29,19 +30,19 @@ struct State {
 }
 
 pub struct MainComponent {
-    num_columns: usize,
+    config: Config,
+    action_tx: UnboundedSender<Action>,
     columns: Vec<ColumnComponent>,
     state: State,
-    action_tx: UnboundedSender<Action>,
 }
 
 impl MainComponent {
-    pub fn new(num_columns: usize, action_tx: UnboundedSender<Action>) -> Self {
+    pub fn new(config: Config, action_tx: UnboundedSender<Action>) -> Self {
         Self {
-            num_columns,
+            config,
+            action_tx,
             columns: Vec::new(),
             state: State { selected: None },
-            action_tx,
         }
     }
     pub async fn save(&self) -> Result<()> {
@@ -82,7 +83,14 @@ impl Component for MainComponent {
             log::warn!("failed to load appdata, using default");
             AppData::default()
         };
-        for i in 0..self.num_columns {
+
+        let auto_num = usize::from(rect.width) / 80;
+        let num_columns = self
+            .config
+            .num_columns
+            .map_or(auto_num, |n| n.min(auto_num));
+
+        for i in 0..num_columns {
             let action_tx = self.action_tx.clone();
             let mut column = ColumnComponent::new(action_tx.clone());
             if let Some(config) = appdata.views.get(i).and_then(|view| view.agent.as_ref()) {

@@ -23,7 +23,7 @@
         "global": {
           "type": "object",
           "patternProperties": {
-            "^((Ctrl|Shift)\\+[a-z]|[ -@\\[-~])$": {
+            "^(Ctrl-[a-z]|Shift-[A-Z]|[ -@\\[-~])$": {
               "type": "string",
               "enum": [
                 "NextFocus",
@@ -38,7 +38,7 @@
         "column": {
           "type": "object",
           "patternProperties": {
-            "^((Ctrl|Shift)\\+[a-z]|[ -@\\[-~])$": {
+            "^(Ctrl-[a-z]|Shift-[A-Z]|[ -@\\[-~])$": {
               "type": "string",
               "enum": [
                 "NextItem",

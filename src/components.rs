@@ -2,6 +2,7 @@ pub mod column;
 pub mod main;
 pub mod views;
 
+use crate::config::Config;
 use crate::types::{Action, Event};
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyEvent, MouseEvent};
@@ -34,10 +35,10 @@ pub trait Component {
     /// # Returns
     ///
     /// * `Result<()>` - An Ok result or an error.
-    // #[allow(unused_variables)]
-    // fn register_config_handler(&mut self, config: Config) -> Result<()> {
-    //     Ok(())
-    // }
+    #[allow(unused_variables)]
+    fn register_config_handler(&mut self, config: Config) -> Result<()> {
+        Ok(())
+    }
     /// Initialize the component with a specified area if necessary.
     ///
     /// # Arguments

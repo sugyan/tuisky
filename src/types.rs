@@ -8,6 +8,7 @@ pub type IdType = u32;
 #[derive(Clone)]
 pub enum Action {
     Error(String),
+    Help,
     Quit,
     Tick(usize),
     Render,
@@ -21,6 +22,7 @@ impl Debug for Action {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Self::Error(arg) => f.debug_tuple("Error").field(arg).finish(),
+            Self::Help => write!(f, "Help"),
             Self::Quit => write!(f, "Quit"),
             Self::Tick(arg) => f.debug_tuple("Tick").field(arg).finish(),
             Self::Render => write!(f, "Render"),

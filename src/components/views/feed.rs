@@ -196,7 +196,7 @@ impl ViewComponent for FeedViewComponent {
                         lines.extend(
                             textwrap::wrap(
                                 &record.text,
-                                Options::new(area.width as usize - 2)
+                                Options::new(usize::from(area.width) - 2)
                                     .initial_indent("    ")
                                     .subsequent_indent("    "),
                             )
@@ -209,7 +209,7 @@ impl ViewComponent for FeedViewComponent {
             lines.extend(
                 textwrap::wrap(
                     &record.text,
-                    Options::new(area.width as usize - 2)
+                    Options::new(usize::from(area.width) - 2)
                         .initial_indent("  ")
                         .subsequent_indent("  "),
                 )
@@ -265,7 +265,7 @@ impl ViewComponent for FeedViewComponent {
                                 lines.extend(
                                     textwrap::wrap(
                                         &post.text,
-                                        Options::new(area.width as usize - 2)
+                                        Options::new(usize::from(area.width) - 2)
                                             .initial_indent("      ")
                                             .subsequent_indent("      "),
                                     )
