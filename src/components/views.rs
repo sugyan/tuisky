@@ -6,19 +6,10 @@ mod utils;
 
 use self::types::Action;
 use color_eyre::Result;
-use crossterm::event::{KeyEvent, MouseEvent};
+use crossterm::event::KeyEvent;
 use ratatui::{layout::Rect, Frame};
-use tokio::sync::mpsc::UnboundedSender;
 
 pub trait ViewComponent {
-    #[allow(unused_variables)]
-    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
-        Ok(())
-    }
-    #[allow(unused_variables)]
-    fn init(&mut self, area: Rect) -> Result<()> {
-        Ok(())
-    }
     fn activate(&mut self) -> Result<()> {
         Ok(())
     }
@@ -27,10 +18,6 @@ pub trait ViewComponent {
     }
     #[allow(unused_variables)]
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        Ok(None)
-    }
-    #[allow(unused_variables)]
-    fn handle_mouse_events(&mut self, mouse: MouseEvent) -> Result<Option<Action>> {
         Ok(None)
     }
     #[allow(unused_variables)]

@@ -1,3 +1,4 @@
+use crate::backend::config::Config as WatcherConfig;
 use crate::components::views::types::Action as ViewAction;
 use crate::types::Action as AppAction;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -6,11 +7,13 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Config {
-    #[serde(default)]
-    pub keybindings: Keybindings,
     pub num_columns: Option<usize>,
     #[serde(default)]
     pub dev: bool,
+    #[serde(default)]
+    pub keybindings: Keybindings,
+    #[serde(default)]
+    pub watcher: WatcherConfig,
 }
 
 impl Config {
@@ -177,6 +180,7 @@ impl From<&ColumnAction> for ViewAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::config::Intervals;
 
     #[test]
     fn deserialize_empty() {
@@ -187,6 +191,8 @@ mod tests {
     #[test]
     fn deserialize() {
         let input = r#"
+dev = true
+
 [keybindings.global]
 Ctrl-c = "Quit"
 "?" = "Help"
@@ -202,6 +208,8 @@ feed_view_posts = 20
         assert_eq!(
             config,
             Config {
+                dev: true,
+                num_columns: None,
                 keybindings: Keybindings {
                     global: HashMap::from_iter([
                         (
@@ -221,8 +229,12 @@ feed_view_posts = 20
                         )
                     ]),
                 },
-                num_columns: None,
-                dev: false,
+                watcher: WatcherConfig {
+                    intervals: Intervals {
+                        feed_view_posts: 20,
+                        preferences: 60,
+                    }
+                }
             }
         )
     }
@@ -230,6 +242,8 @@ feed_view_posts = 20
     #[test]
     fn serialize() {
         let config = Config {
+            num_columns: None,
+            dev: true,
             keybindings: Keybindings {
                 global: HashMap::from_iter([
                     (
@@ -240,8 +254,12 @@ feed_view_posts = 20
                 ]),
                 column: HashMap::new(),
             },
-            num_columns: None,
-            dev: true,
+            watcher: WatcherConfig {
+                intervals: Intervals {
+                    feed_view_posts: 10,
+                    preferences: 10,
+                },
+            },
         };
         let s = toml::to_string(&config).expect("failed to serialize config");
         let deserialized = toml::from_str::<Config>(&s).expect("failed to deserialize config");

@@ -183,7 +183,10 @@ impl Component for ColumnComponent {
                         }
                     });
                 }
-                self.watcher = Some(Arc::new(Watcher::new(Arc::new(*agent))));
+                self.watcher = Some(Arc::new(Watcher::new(
+                    Arc::new(*agent),
+                    self.config.watcher.clone(),
+                )));
                 return self.transition(&Transition::Replace(Box::new(View::Root)));
             }
             _ => {}
