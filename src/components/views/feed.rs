@@ -13,7 +13,6 @@ use bsky_sdk::api::types::Union;
 use chrono::Local;
 use color_eyre::Result;
 use indexmap::IndexMap;
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
@@ -72,18 +71,6 @@ impl ViewComponent for FeedViewComponent {
             handle.abort();
         }
         Ok(())
-    }
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        match (key.code, key.modifiers) {
-            (KeyCode::Char('n'), KeyModifiers::CONTROL) | (KeyCode::Down, KeyModifiers::NONE) => {
-                Ok(Some(Action::NextItem))
-            }
-            (KeyCode::Char('p'), KeyModifiers::CONTROL) | (KeyCode::Up, KeyModifiers::NONE) => {
-                Ok(Some(Action::PrevItem))
-            }
-            (KeyCode::Char('b'), KeyModifiers::CONTROL) => Ok(Some(Action::Back)),
-            _ => Ok(None),
-        }
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {

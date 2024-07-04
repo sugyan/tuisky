@@ -5,8 +5,9 @@ use crate::types::Action;
 use crate::utils::get_data_dir;
 use bsky_sdk::agent::config::Config as AgentConfig;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyEvent;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::Color;
 use ratatui::widgets::{Block, BorderType};
 use ratatui::Frame;
 use serde::{Deserialize, Serialize};
@@ -91,8 +92,7 @@ impl Component for MainComponent {
             .map_or(auto_num, |n| n.min(auto_num));
 
         for i in 0..num_columns {
-            let action_tx = self.action_tx.clone();
-            let mut column = ColumnComponent::new(action_tx.clone());
+            let mut column = ColumnComponent::new(self.config.clone(), self.action_tx.clone());
             if let Some(config) = appdata.views.get(i).and_then(|view| view.agent.as_ref()) {
                 column.init_with_config(config)?;
             } else {
@@ -106,21 +106,26 @@ impl Component for MainComponent {
         Ok(())
     }
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        if matches!(
-            (key.code, key.modifiers),
-            (KeyCode::Char('o'), KeyModifiers::CONTROL)
-        ) {
-            return Ok(Some(Action::NextFocus));
-        } else if let Some(selected) = self.state.selected {
-            return self.columns[selected].handle_key_events(key);
+        if let Some(selected) = self.state.selected {
+            self.columns[selected].handle_key_events(key)
+        } else {
+            Ok(None)
         }
-        Ok(None)
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::NextFocus => {
                 self.state.selected =
                     Some(self.state.selected.map_or(0, |s| s + 1) % self.columns.len());
+                return Ok(Some(Action::Render));
+            }
+            Action::PrevFocus => {
+                self.state.selected = Some(
+                    self.state
+                        .selected
+                        .map_or(0, |s| s + self.columns.len() - 1)
+                        % self.columns.len(),
+                );
                 return Ok(Some(Action::Render));
             }
             _ => {
@@ -143,7 +148,9 @@ impl Component for MainComponent {
                 .title(view.title())
                 .title_alignment(Alignment::Center);
             if self.state.selected == Some(i) {
-                block = block.border_type(BorderType::Double)
+                block = block
+                    .border_type(BorderType::Double)
+                    .border_style(Color::White);
             }
             view.draw(f, block.inner(*area))?;
             f.render_widget(block, *area);

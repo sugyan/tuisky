@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::tui::{io, Tui};
 use crate::types::{Action, Event};
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyEvent;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Style};
@@ -157,12 +157,10 @@ impl App {
         None
     }
     fn handle_key_events(&mut self, key_event: KeyEvent) -> Option<Action> {
-        if let Some(action) = self.config.keybindings.global.get(&key_event.into()) {
-            Some(action.into())
-        } else if key_event == KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL) {
-            Some(Action::Quit)
-        } else {
-            None
-        }
+        self.config
+            .keybindings
+            .global
+            .get(&key_event.into())
+            .map(Into::into)
     }
 }

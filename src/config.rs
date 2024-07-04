@@ -1,3 +1,4 @@
+use crate::components::views::types::Action as ViewAction;
 use crate::types::Action as AppAction;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -10,6 +11,51 @@ pub struct Config {
     pub num_columns: Option<usize>,
     #[serde(default)]
     pub dev: bool,
+}
+
+impl Config {
+    pub fn set_default_keybindings(&mut self) {
+        // global: Ctrl+q to Quit
+        self.keybindings
+            .global
+            .entry(Key(KeyCode::Char('q'), Some(KeyModifiers::CONTROL)))
+            .or_insert(GlobalAction::Quit);
+        // global: Ctrl+o to NextFocus
+        self.keybindings
+            .global
+            .entry(Key(KeyCode::Char('o'), Some(KeyModifiers::CONTROL)))
+            .or_insert(GlobalAction::NextFocus);
+        // column: Down to NextItem
+        self.keybindings
+            .column
+            .entry(Key(KeyCode::Down, None))
+            .or_insert(ColumnAction::NextItem);
+        // column: Up to PrevItem
+        self.keybindings
+            .column
+            .entry(Key(KeyCode::Up, None))
+            .or_insert(ColumnAction::PrevItem);
+        // column: Tab to NextInput
+        self.keybindings
+            .column
+            .entry(Key(KeyCode::Tab, None))
+            .or_insert(ColumnAction::NextInput);
+        // column: BackTab to PrevInput
+        self.keybindings
+            .column
+            .entry(Key(KeyCode::BackTab, Some(KeyModifiers::SHIFT)))
+            .or_insert(ColumnAction::NextInput);
+        // column: Enter to Enter
+        self.keybindings
+            .column
+            .entry(Key(KeyCode::Enter, None))
+            .or_insert(ColumnAction::Enter);
+        // column: Backspace to Back
+        self.keybindings
+            .column
+            .entry(Key(KeyCode::Backspace, None))
+            .or_insert(ColumnAction::Back);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -97,10 +143,10 @@ pub enum GlobalAction {
 impl From<&GlobalAction> for AppAction {
     fn from(action: &GlobalAction) -> Self {
         match action {
-            GlobalAction::NextFocus => AppAction::NextFocus,
-            GlobalAction::PrevFocus => AppAction::PrevFocus,
-            GlobalAction::Help => AppAction::Help,
-            GlobalAction::Quit => AppAction::Quit,
+            GlobalAction::NextFocus => Self::NextFocus,
+            GlobalAction::PrevFocus => Self::PrevFocus,
+            GlobalAction::Help => Self::Help,
+            GlobalAction::Quit => Self::Quit,
         }
     }
 }
@@ -113,6 +159,19 @@ pub enum ColumnAction {
     PrevInput,
     Enter,
     Back,
+}
+
+impl From<&ColumnAction> for ViewAction {
+    fn from(action: &ColumnAction) -> Self {
+        match action {
+            ColumnAction::NextItem => Self::NextItem,
+            ColumnAction::PrevItem => Self::PrevItem,
+            ColumnAction::NextInput => Self::NextInput,
+            ColumnAction::PrevInput => Self::PrevInput,
+            ColumnAction::Enter => Self::Enter,
+            ColumnAction::Back => Self::Back,
+        }
+    }
 }
 
 #[cfg(test)]

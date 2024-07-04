@@ -45,6 +45,7 @@ async fn main() -> Result<()> {
     } else {
         Config::default()
     };
+    config.set_default_keybindings();
     if let Some(num_columns) = args.num_columns {
         config.num_columns = Some(num_columns);
     }
