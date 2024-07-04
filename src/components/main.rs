@@ -1,12 +1,13 @@
 use super::column::ColumnComponent;
 use super::Component;
+use crate::config::Config;
 use crate::types::Action;
-use bsky_sdk::agent::config::Config;
-use color_eyre::eyre::eyre;
+use crate::utils::get_data_dir;
+use bsky_sdk::agent::config::Config as AgentConfig;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use directories::ProjectDirs;
+use crossterm::event::KeyEvent;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::Color;
 use ratatui::widgets::{Block, BorderType};
 use ratatui::Frame;
 use serde::{Deserialize, Serialize};
@@ -21,7 +22,7 @@ struct AppData {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct ViewData {
-    agent: Option<Config>,
+    agent: Option<AgentConfig>,
 }
 
 #[derive(Default)]
@@ -30,19 +31,19 @@ struct State {
 }
 
 pub struct MainComponent {
-    num_columns: usize,
+    config: Config,
+    action_tx: UnboundedSender<Action>,
     columns: Vec<ColumnComponent>,
     state: State,
-    action_tx: UnboundedSender<Action>,
 }
 
 impl MainComponent {
-    pub fn new(num_columns: usize, action_tx: UnboundedSender<Action>) -> Self {
+    pub fn new(config: Config, action_tx: UnboundedSender<Action>) -> Self {
         Self {
-            num_columns,
+            config,
+            action_tx,
             columns: Vec::new(),
             state: State { selected: None },
-            action_tx,
         }
     }
     pub async fn save(&self) -> Result<()> {
@@ -50,8 +51,8 @@ impl MainComponent {
             views: Vec::with_capacity(self.columns.len()),
         };
         for view in &self.columns {
-            let config = if let Some(m) = &view.watcher {
-                Some(m.get_agent_config().await)
+            let config = if let Some(w) = &view.watcher {
+                Some(w.agent.to_config().await)
             } else {
                 None
             };
@@ -69,16 +70,9 @@ impl MainComponent {
         Ok(appdata)
     }
     fn appdata_path() -> Result<PathBuf> {
-        let data_dir = Self::get_data_dir()?;
+        let data_dir = get_data_dir()?;
         create_dir_all(&data_dir)?;
         Ok(data_dir.join("appdata.json"))
-    }
-    fn get_data_dir() -> Result<PathBuf> {
-        if let Some(proj_dir) = ProjectDirs::from("com", "sugyan", "tuisky") {
-            Ok(proj_dir.data_dir().to_path_buf())
-        } else {
-            Err(eyre!("failed to get project directories"))
-        }
     }
 }
 
@@ -90,9 +84,15 @@ impl Component for MainComponent {
             log::warn!("failed to load appdata, using default");
             AppData::default()
         };
-        for i in 0..self.num_columns {
-            let action_tx = self.action_tx.clone();
-            let mut column = ColumnComponent::new(action_tx.clone());
+
+        let auto_num = usize::from(rect.width) / 80;
+        let num_columns = self
+            .config
+            .num_columns
+            .map_or(auto_num, |n| n.min(auto_num));
+
+        for i in 0..num_columns {
+            let mut column = ColumnComponent::new(self.config.clone(), self.action_tx.clone());
             if let Some(config) = appdata.views.get(i).and_then(|view| view.agent.as_ref()) {
                 column.init_with_config(config)?;
             } else {
@@ -106,21 +106,26 @@ impl Component for MainComponent {
         Ok(())
     }
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        if matches!(
-            (key.code, key.modifiers),
-            (KeyCode::Char('o'), KeyModifiers::CONTROL)
-        ) {
-            return Ok(Some(Action::NextFocus));
-        } else if let Some(selected) = self.state.selected {
-            return self.columns[selected].handle_key_events(key);
+        if let Some(selected) = self.state.selected {
+            self.columns[selected].handle_key_events(key)
+        } else {
+            Ok(None)
         }
-        Ok(None)
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::NextFocus => {
                 self.state.selected =
                     Some(self.state.selected.map_or(0, |s| s + 1) % self.columns.len());
+                return Ok(Some(Action::Render));
+            }
+            Action::PrevFocus => {
+                self.state.selected = Some(
+                    self.state
+                        .selected
+                        .map_or(0, |s| s + self.columns.len() - 1)
+                        % self.columns.len(),
+                );
                 return Ok(Some(Action::Render));
             }
             _ => {
@@ -143,7 +148,9 @@ impl Component for MainComponent {
                 .title(view.title())
                 .title_alignment(Alignment::Center);
             if self.state.selected == Some(i) {
-                block = block.border_type(BorderType::Double)
+                block = block
+                    .border_type(BorderType::Double)
+                    .border_style(Color::White);
             }
             view.draw(f, block.inner(*area))?;
             f.render_widget(block, *area);

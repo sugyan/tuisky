@@ -1,12 +1,12 @@
-use super::types::SavedFeed;
-use crate::backend::types::SavedFeedValue;
+use super::config::Config;
+use super::types::{SavedFeed, SavedFeedValue};
 use bsky_sdk::api::app::bsky::actor::defs::SavedFeedData;
 use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, FeedViewPostReasonRefs};
 use bsky_sdk::api::types::string::Cid;
 use bsky_sdk::api::types::{Object, Union};
 use bsky_sdk::preference::Preferences;
+use bsky_sdk::BskyAgent;
 use bsky_sdk::Result;
-use bsky_sdk::{agent::config::Config, BskyAgent};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,13 +16,14 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 pub struct Watcher {
-    agent: Arc<BskyAgent>,
+    pub agent: Arc<BskyAgent>,
+    config: Config,
     preferences: Sender<Preferences>,
     handles: Vec<JoinHandle<()>>,
 }
 
 impl Watcher {
-    pub fn new(agent: Arc<BskyAgent>) -> Self {
+    pub fn new(agent: Arc<BskyAgent>, config: Config) -> Self {
         let (preferences, mut rx) = watch::channel(Preferences::default());
         let mut handles = Vec::new();
         {
@@ -34,13 +35,11 @@ impl Watcher {
             }));
             let (agent, tx) = (agent.clone(), preferences.clone());
             handles.push(tokio::spawn(async move {
-                let mut interval = time::interval(Duration::from_secs(1));
-                let mut preferences_interval = time::interval(Duration::from_secs(60));
+                let mut preferences_interval =
+                    time::interval(Duration::from_secs(config.intervals.preferences));
                 loop {
-                    let tick = interval.tick();
                     let preferences_tick = preferences_interval.tick();
                     tokio::select! {
-                        _ = tick => {}
                         _ = preferences_tick => {
                             if let Ok(prefs) = agent.get_preferences(true).await {
                                 if let Err(e) = tx.send(prefs.clone()) {
@@ -56,6 +55,7 @@ impl Watcher {
         }
         Self {
             agent,
+            config,
             preferences,
             handles,
         }
@@ -64,9 +64,6 @@ impl Watcher {
         for handle in &self.handles {
             handle.abort();
         }
-    }
-    pub async fn get_agent_config(&self) -> Config {
-        self.agent.to_config().await
     }
     pub fn saved_feeds(&self, init: Vec<SavedFeed>) -> Receiver<Vec<SavedFeed>> {
         let (tx, rx) = watch::channel(init);
@@ -107,9 +104,10 @@ impl Watcher {
         let (tx, rx) = watch::channel(init.clone());
         let agent = self.agent.clone();
         let feed = feed.clone();
+        let interval = self.config.intervals.feed_view_posts;
         let mut feed_map = init;
         tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_secs(30));
+            let mut interval = time::interval(Duration::from_secs(interval));
             loop {
                 let tick = interval.tick();
                 tokio::select! {

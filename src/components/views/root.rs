@@ -4,7 +4,6 @@ use crate::backend::types::{SavedFeed, SavedFeedValue};
 use crate::backend::Watcher;
 use crate::components::views::types::Data;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, List, ListState, Padding};
@@ -55,18 +54,6 @@ impl ViewComponent for RootComponent {
             handle.abort();
         }
         Ok(())
-    }
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        match (key.code, key.modifiers) {
-            (KeyCode::Char('n'), KeyModifiers::CONTROL) | (KeyCode::Down, KeyModifiers::NONE) => {
-                Ok(Some(Action::NextItem))
-            }
-            (KeyCode::Char('p'), KeyModifiers::CONTROL) | (KeyCode::Up, KeyModifiers::NONE) => {
-                Ok(Some(Action::PrevItem))
-            }
-            (KeyCode::Enter, _) => Ok(Some(Action::Enter)),
-            _ => Ok(None),
-        }
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {

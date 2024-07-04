@@ -2,7 +2,7 @@ use super::types::Action;
 use super::ViewComponent;
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyEvent;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::widgets::{Block, Borders, Padding, Paragraph, Wrap};
@@ -75,20 +75,13 @@ impl LoginComponent {
 
 impl ViewComponent for LoginComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        match (key.code, key.modifiers) {
-            (KeyCode::Tab, KeyModifiers::NONE) => Ok(Some(Action::NextInput)),
-            (KeyCode::BackTab, KeyModifiers::SHIFT) => Ok(Some(Action::PrevInput)),
-            _ => {
-                if let Some(current) = self.current() {
-                    current.handle_key_event(key);
-                }
-                Ok(if key.code == KeyCode::Enter {
-                    Some(Action::Enter)
-                } else {
-                    Some(Action::Render)
-                })
+        if let Some(current) = self.current() {
+            current.handle_key_event(key);
+            if let Err(err) = self.action_tx.send(Action::Render) {
+                log::error!("failed to send render event: {err}");
             }
         }
+        Ok(None)
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {

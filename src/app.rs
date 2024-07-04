@@ -1,9 +1,10 @@
 use crate::components::main::MainComponent;
 use crate::components::Component;
+use crate::config::Config;
 use crate::tui::{io, Tui};
 use crate::types::{Action, Event};
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyEvent;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Style};
@@ -13,48 +14,52 @@ use tokio::sync::mpsc;
 use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget};
 
 pub struct App {
-    columns: Option<usize>,
-    dev: bool,
+    config: Config,
     components: Vec<Box<dyn Component>>,
 }
 
 impl App {
-    pub fn new(columns: Option<usize>, dev: bool) -> Self {
-        log::debug!("App::new(dev: {dev})");
+    pub fn new(config: Config) -> Self {
+        log::debug!("App::new({config:?})");
         Self {
-            columns,
-            dev,
+            config,
             components: Vec::new(),
         }
     }
     pub async fn run(&mut self) -> Result<()> {
         let (action_tx, mut action_rx) = mpsc::unbounded_channel();
 
+        // Setup terminal
         let terminal = Terminal::new(CrosstermBackend::new(io()))?;
         log::debug!("terminal size: {}", terminal.size()?);
         let mut tui = Tui::new(terminal);
-        tui.start(if self.dev { Some(10.0) } else { None })?;
+        tui.start(if self.config.dev { Some(10.0) } else { None })?;
 
-        let auto_num = usize::from(tui.size()?.width - if self.dev { 75 } else { 0 }) / 80;
-        let mut main_component = MainComponent::new(
-            self.columns.map_or(auto_num, |n| n.min(auto_num)),
-            action_tx.clone(),
-        );
+        // Prepare layout constraints
+        let mut constraints = vec![Constraint::Percentage(100)];
+        if self.config.dev {
+            constraints.push(Constraint::Min(75));
+        }
+        let layout = Layout::horizontal(&constraints).split(tui.size()?);
 
+        // Create main component
+        let mut main_component = MainComponent::new(self.config.clone(), action_tx.clone());
+
+        // Setup components
         main_component.register_action_handler(action_tx.clone())?;
         for component in self.components.iter_mut() {
             component.register_action_handler(action_tx.clone())?;
         }
-        // TODO: config handler?
-        main_component.init(tui.size()?)?;
+        main_component.register_config_handler(self.config.clone())?;
+        for component in self.components.iter_mut() {
+            component.register_config_handler(self.config.clone())?;
+        }
+        main_component.init(layout[0])?;
         for component in self.components.iter_mut() {
             component.init(tui.size()?)?;
         }
 
-        let mut constraints = vec![Constraint::Percentage(100)];
-        if self.dev {
-            constraints.push(Constraint::Min(75));
-        }
+        // Main loop
         let mut should_quit = false;
         loop {
             if let Some(e) = tui.next_event().await {
@@ -95,7 +100,7 @@ impl App {
                                 }
                             }
                             // render log components to the right side
-                            if self.dev {
+                            if self.config.dev {
                                 f.render_widget(
                                     TuiLoggerWidget::default()
                                         .block(Block::bordered().title("log"))
@@ -152,11 +157,10 @@ impl App {
         None
     }
     fn handle_key_events(&mut self, key_event: KeyEvent) -> Option<Action> {
-        if matches!(key_event.code, KeyCode::Char('c' | 'q'))
-            && key_event.modifiers == KeyModifiers::CONTROL
-        {
-            return Some(Action::Quit);
-        }
-        None
+        self.config
+            .keybindings
+            .global
+            .get(&key_event.into())
+            .map(Into::into)
     }
 }

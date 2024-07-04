@@ -5,8 +5,9 @@ use super::views::types::{Action as ViewAction, Transition, View};
 use super::views::ViewComponent;
 use super::Component;
 use crate::backend::Watcher;
+use crate::config::Config;
 use crate::types::{Action, IdType};
-use bsky_sdk::agent::config::Config;
+use bsky_sdk::agent::config::Config as AgentConfig;
 use bsky_sdk::api::agent::Session;
 use bsky_sdk::BskyAgent;
 use color_eyre::{eyre, Result};
@@ -22,13 +23,14 @@ pub struct ColumnComponent {
     pub id: IdType,
     pub watcher: Option<Arc<Watcher>>,
     pub views: Vec<Box<dyn ViewComponent>>,
-    session: Arc<RwLock<Option<Session>>>,
+    config: Config,
     action_tx: UnboundedSender<Action>,
     view_tx: UnboundedSender<ViewAction>,
+    session: Arc<RwLock<Option<Session>>>,
 }
 
 impl ColumnComponent {
-    pub fn new(action_tx: UnboundedSender<Action>) -> Self {
+    pub fn new(config: Config, action_tx: UnboundedSender<Action>) -> Self {
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
         let (view_tx, mut view_rx) = mpsc::unbounded_channel();
         let tx = action_tx.clone();
@@ -52,12 +54,13 @@ impl ColumnComponent {
             id,
             watcher: None,
             views: Vec::new(),
-            session: Arc::new(RwLock::new(None)),
+            config,
             action_tx,
             view_tx,
+            session: Arc::new(RwLock::new(None)),
         }
     }
-    pub fn init_with_config(&mut self, config: &Config) -> Result<()> {
+    pub fn init_with_config(&mut self, config: &AgentConfig) -> Result<()> {
         let config = config.clone();
         let (id, tx) = (self.id, self.action_tx.clone());
         tokio::spawn(async move {
@@ -129,8 +132,12 @@ impl Component for ColumnComponent {
     }
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
         if let Some(view) = self.views.last_mut() {
-            view.handle_key_events(key)
-                .map(|action| action.map(|a| Action::View((self.id, a))))
+            if let Some(action) = view.handle_key_events(key)? {
+                return Ok(Some(Action::View((self.id, action))));
+            }
+        }
+        if let Some(action) = self.config.keybindings.column.get(&key.into()) {
+            Ok(Some(Action::View((self.id, action.into()))))
         } else {
             Ok(None)
         }
@@ -176,7 +183,10 @@ impl Component for ColumnComponent {
                         }
                     });
                 }
-                self.watcher = Some(Arc::new(Watcher::new(Arc::new(*agent))));
+                self.watcher = Some(Arc::new(Watcher::new(
+                    Arc::new(*agent),
+                    self.config.watcher.clone(),
+                )));
                 return self.transition(&Transition::Replace(Box::new(View::Root)));
             }
             _ => {}
