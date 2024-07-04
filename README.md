@@ -14,7 +14,7 @@
 - [x] Auto save & restore app data
 - [ ] Post texts
 - [ ] Notifications, Chat, ...
-- [ ] Configure with files
+- [x] Configure with files
 - [ ] ... and more
 
 ## Installation
@@ -29,16 +29,46 @@ cargo install tuisky
 Usage: tuisky [OPTIONS]
 
 Options:
-  -c, --columns <COLUMNS>  Maximum number of columns to display. The number of columns will be determined by the terminal width
-  -d, --dev                Development mode
-  -h, --help               Print help
-  -V, --version            Print version
+  -c, --config <CONFIG>            Path to the configuration file
+  -n, --num-columns <NUM_COLUMNS>  Maximum number of columns to display. The number of columns will be determined by the terminal width
+  -d, --dev                        Development mode
+  -h, --help                       Print help
+  -V, --version                    Print version
 ```
 
-### Basic key bindings
+### Default key bindings
 
-- `Ctrl + c` or `Ctrl + q`: Quit
-- `Ctrl + o`: Focus next column
-- `Ctrl + n`: Next item
-- `Ctrl + p`: Prev item
+Global:
+
+- `Ctrl - q`: Quit
+- `Ctrl - o`: Focus next column
+
+Column:
+
+- `Down`: Next item
+- `Up`: Prev item
 - `Enter`: Select item
+- `Backspace`: Back to previous view
+
+
+### Configuration with toml file
+
+Various settings can be read from a file.
+
+```
+tuisky --config path/to/config.toml
+```
+
+```toml
+[keybindings.global]
+Ctrl-c = "Quit"
+
+[keybindings.column]
+Ctrl-n = "NextItem"
+Ctrl-p = "PrevItem"
+
+[watcher.intervals]
+feed_view_posts = 20
+```
+
+The config schema can be referenced by [JSON Schema](./config/tuisky.config.schema.json).
