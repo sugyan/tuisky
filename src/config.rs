@@ -18,45 +18,45 @@ pub struct Config {
 
 impl Config {
     pub fn set_default_keybindings(&mut self) {
-        // global: Ctrl+q to Quit
+        // global: Ctrl-q to Quit
         self.keybindings
             .global
-            .entry(Key(KeyCode::Char('q'), Some(KeyModifiers::CONTROL)))
+            .entry(Key(KeyCode::Char('q'), KeyModifiers::CONTROL))
             .or_insert(GlobalAction::Quit);
-        // global: Ctrl+o to NextFocus
+        // global: Ctrl-o to NextFocus
         self.keybindings
             .global
-            .entry(Key(KeyCode::Char('o'), Some(KeyModifiers::CONTROL)))
+            .entry(Key(KeyCode::Char('o'), KeyModifiers::CONTROL))
             .or_insert(GlobalAction::NextFocus);
         // column: Down to NextItem
         self.keybindings
             .column
-            .entry(Key(KeyCode::Down, None))
+            .entry(Key(KeyCode::Down, KeyModifiers::NONE))
             .or_insert(ColumnAction::NextItem);
         // column: Up to PrevItem
         self.keybindings
             .column
-            .entry(Key(KeyCode::Up, None))
+            .entry(Key(KeyCode::Up, KeyModifiers::NONE))
             .or_insert(ColumnAction::PrevItem);
         // column: Tab to NextInput
         self.keybindings
             .column
-            .entry(Key(KeyCode::Tab, None))
+            .entry(Key(KeyCode::Tab, KeyModifiers::NONE))
             .or_insert(ColumnAction::NextInput);
         // column: BackTab to PrevInput
         self.keybindings
             .column
-            .entry(Key(KeyCode::BackTab, Some(KeyModifiers::SHIFT)))
+            .entry(Key(KeyCode::BackTab, KeyModifiers::SHIFT))
             .or_insert(ColumnAction::NextInput);
         // column: Enter to Enter
         self.keybindings
             .column
-            .entry(Key(KeyCode::Enter, None))
+            .entry(Key(KeyCode::Enter, KeyModifiers::NONE))
             .or_insert(ColumnAction::Enter);
         // column: Backspace to Back
         self.keybindings
             .column
-            .entry(Key(KeyCode::Backspace, None))
+            .entry(Key(KeyCode::Backspace, KeyModifiers::NONE))
             .or_insert(ColumnAction::Back);
     }
 }
@@ -68,17 +68,11 @@ pub struct Keybindings {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Key(KeyCode, Option<KeyModifiers>);
+pub struct Key(KeyCode, KeyModifiers);
 
 impl From<KeyEvent> for Key {
     fn from(event: KeyEvent) -> Self {
-        Self(
-            event.code,
-            match event.modifiers {
-                KeyModifiers::CONTROL | KeyModifiers::SHIFT => Some(event.modifiers),
-                _ => None,
-            },
-        )
+        Self(event.code, event.modifiers)
     }
 }
 
@@ -87,19 +81,19 @@ impl Serialize for Key {
     where
         S: Serializer,
     {
-        match self.0 {
-            KeyCode::Char(c) => match self.1 {
-                Some(modifier) => {
-                    let modifier = match modifier {
-                        KeyModifiers::CONTROL => "Ctrl",
-                        KeyModifiers::SHIFT => "Shift",
-                        _ => return Err(serde::ser::Error::custom("invalid key modifier")),
-                    };
-                    format!("{modifier}-{c}").serialize(serializer)
-                }
-                None => c.to_string().serialize(serializer),
-            },
-            _ => Err(serde::ser::Error::custom("invalid key code")),
+        let key_code = match self.0 {
+            KeyCode::Char(c) => c.to_string(),
+            _ => format!("{:?}", self.0),
+        };
+        if self.1 == KeyModifiers::NONE {
+            key_code.serialize(serializer)
+        } else {
+            let modifier = match self.1 {
+                KeyModifiers::CONTROL => "Ctrl",
+                KeyModifiers::SHIFT => "Shift",
+                _ => return Err(serde::ser::Error::custom("unsupported key modifier")),
+            };
+            format!("{modifier}-{key_code}").serialize(serializer)
         }
     }
 }
@@ -116,8 +110,8 @@ impl<'de> Deserialize<'de> for Key {
                 Ok(Self(
                     KeyCode::Char(c),
                     match modifier {
-                        "Ctrl" => Some(KeyModifiers::CONTROL),
-                        "Shift" => Some(KeyModifiers::SHIFT),
+                        "Ctrl" => KeyModifiers::CONTROL,
+                        "Shift" => KeyModifiers::SHIFT,
                         _ => return Err(serde::de::Error::custom("invalid key modifier")),
                     },
                 ))
@@ -125,12 +119,26 @@ impl<'de> Deserialize<'de> for Key {
                 Err(serde::de::Error::custom("invalid key"))
             }
         } else {
-            let mut chars = s.chars();
-            if let (Some(c), None) = (chars.next(), chars.next()) {
-                Ok(Self(KeyCode::Char(c), None))
-            } else {
-                Err(serde::de::Error::custom("invalid key"))
-            }
+            let key_code = match s.as_str() {
+                "Backspace" => KeyCode::Backspace,
+                "Enter" => KeyCode::Enter,
+                "Left" => KeyCode::Left,
+                "Right" => KeyCode::Right,
+                "Up" => KeyCode::Up,
+                "Down" => KeyCode::Down,
+                "Home" => KeyCode::Home,
+                "End" => KeyCode::End,
+                "PageUp" => KeyCode::PageUp,
+                "PageDown" => KeyCode::PageDown,
+                "Tab" => KeyCode::Tab,
+                "BackTab" => KeyCode::BackTab,
+                "Delete" => KeyCode::Delete,
+                "Insert" => KeyCode::Insert,
+                "Esc" => KeyCode::Esc,
+                _ if s.len() == 1 => KeyCode::Char(s.chars().next().unwrap()),
+                _ => return Err(serde::de::Error::custom("unsupported key code")),
+            };
+            Ok(Self(key_code, KeyModifiers::NONE))
         }
     }
 }
@@ -200,6 +208,7 @@ Ctrl-c = "Quit"
 [keybindings.column]
 Ctrl-n = "NextItem"
 Ctrl-p = "PrevItem"
+Left = "Back"
 
 [watcher.intervals]
 feed_view_posts = 20
@@ -213,20 +222,24 @@ feed_view_posts = 20
                 keybindings: Keybindings {
                     global: HashMap::from_iter([
                         (
-                            Key(KeyCode::Char('c'), Some(KeyModifiers::CONTROL)),
+                            Key(KeyCode::Char('c'), KeyModifiers::CONTROL),
                             GlobalAction::Quit
                         ),
-                        (Key(KeyCode::Char('?'), None), GlobalAction::Help)
+                        (
+                            Key(KeyCode::Char('?'), KeyModifiers::NONE),
+                            GlobalAction::Help
+                        )
                     ]),
                     column: HashMap::from_iter([
                         (
-                            Key(KeyCode::Char('n'), Some(KeyModifiers::CONTROL)),
+                            Key(KeyCode::Char('n'), KeyModifiers::CONTROL),
                             ColumnAction::NextItem
                         ),
                         (
-                            Key(KeyCode::Char('p'), Some(KeyModifiers::CONTROL)),
+                            Key(KeyCode::Char('p'), KeyModifiers::CONTROL),
                             ColumnAction::PrevItem
-                        )
+                        ),
+                        (Key(KeyCode::Left, KeyModifiers::NONE), ColumnAction::Back)
                     ]),
                 },
                 watcher: WatcherConfig {
@@ -246,11 +259,15 @@ feed_view_posts = 20
             dev: true,
             keybindings: Keybindings {
                 global: HashMap::from_iter([
+                    (Key(KeyCode::Esc, KeyModifiers::NONE), GlobalAction::Quit),
                     (
-                        Key(KeyCode::Char('c'), Some(KeyModifiers::CONTROL)),
+                        Key(KeyCode::Char('c'), KeyModifiers::CONTROL),
                         GlobalAction::Quit,
                     ),
-                    (Key(KeyCode::Char('?'), None), GlobalAction::Help),
+                    (
+                        Key(KeyCode::Char('?'), KeyModifiers::NONE),
+                        GlobalAction::Help,
+                    ),
                 ]),
                 column: HashMap::new(),
             },
