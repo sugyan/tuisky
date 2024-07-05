@@ -1,5 +1,5 @@
 use crate::backend::types::{SavedFeed, SavedFeedValue};
-use bsky_sdk::api::app::bsky::feed::defs::FeedViewPost;
+use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, PostView, ReplyRef};
 use bsky_sdk::api::types::string::Cid;
 use bsky_sdk::BskyAgent;
 use indexmap::IndexMap;
@@ -55,4 +55,5 @@ pub enum Transition {
 pub enum View {
     Root,
     Feed(Box<SavedFeedValue>),
+    Post(Box<(PostView, Option<ReplyRef>)>),
 }

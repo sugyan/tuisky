@@ -1,5 +1,6 @@
 pub mod feed;
 pub mod login;
+pub mod post;
 pub mod root;
 pub mod types;
 mod utils;

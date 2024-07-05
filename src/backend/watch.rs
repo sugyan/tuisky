@@ -43,7 +43,7 @@ impl Watcher {
                         _ = preferences_tick => {
                             if let Ok(prefs) = agent.get_preferences(true).await {
                                 if let Err(e) = tx.send(prefs.clone()) {
-                                    log::error!("failed to send preferences data: {e}");
+                                    log::warn!("failed to send preferences data: {e}");
                                 }
                             } else {
                                 log::warn!("failed to get preferences");
@@ -80,7 +80,7 @@ impl Watcher {
                         match collect_feeds(&agent, &saved_feeds).await {
                             Ok(feeds) => {
                                 if let Err(e) = tx.send(feeds) {
-                                    log::error!("failed to send saved feeds: {e}");
+                                    log::warn!("failed to send saved feeds: {e}");
                                 }
                             }
                             Err(e) => {
@@ -115,7 +115,7 @@ impl Watcher {
                         match fetch_feed_views(&agent, &feed, &mut feed_map).await {
                             Ok(()) => {
                                 if let Err(e) = tx.send(feed_map.clone()) {
-                                    log::error!("failed to send feed views: {e}");
+                                    log::warn!("failed to send feed views: {e}");
                                 }
                             }
                             Err(e) => {
