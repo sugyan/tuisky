@@ -117,7 +117,7 @@ impl FeedViewComponent {
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordView(_)) => String::from("record"),
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(_)) => {
-                    String::from("record with media")
+                    String::from("recordWithMedia")
                 }
                 _ => String::from("unknown"),
             };

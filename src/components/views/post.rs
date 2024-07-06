@@ -1,6 +1,10 @@
 use super::types::Transition;
+use super::utils::profile_name;
 use super::{types::Action, ViewComponent};
 use crate::backend::Watcher;
+use bsky_sdk::api::app::bsky::embed::record::{self, ViewRecordRefs};
+use bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs;
+use bsky_sdk::api::app::bsky::embed::{external, images};
 use bsky_sdk::api::app::bsky::feed::defs::{
     PostView, PostViewEmbedRefs, ReplyRef, ReplyRefParentRefs,
 };
@@ -97,35 +101,30 @@ impl PostViewComponent {
             match embed {
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
                     lines.push(Line::from("images").yellow());
-                    lines.extend(images.images.iter().map(|image| {
-                        Line::from(vec![
-                            Span::from(format!("[{}](", image.alt)),
-                            Span::from(image.fullsize.as_str()).underlined(),
-                            Span::from(")"),
-                        ])
-                    }));
+                    lines.extend(Self::images_lines(images))
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(external)) => {
                     lines.push(Line::from("external").yellow());
-                    lines.extend([
-                        Line::from(
-                            Span::from(external.external.uri.as_str())
-                                .dim()
-                                .underlined(),
-                        ),
-                        Line::from(external.external.title.as_str()).bold(),
-                        Line::from(external.external.description.as_str()),
-                    ]);
+                    lines.extend(Self::external_lines(external));
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordView(record)) => {
                     lines.push(Line::from("record").yellow());
-                    // TODO
+                    lines.extend(Self::record_lines(record, width));
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(
                     record_with_media,
                 )) => {
                     lines.push(Line::from("recordWithMedia").yellow());
-                    // TODO
+                    match &record_with_media.media {
+                        Union::Refs(ViewMediaRefs::AppBskyEmbedImagesView(images)) => {
+                            lines.extend(Self::images_lines(images))
+                        }
+                        Union::Refs(ViewMediaRefs::AppBskyEmbedExternalView(external)) => {
+                            lines.extend(Self::external_lines(external));
+                        }
+                        _ => {}
+                    }
+                    lines.extend(Self::record_lines(&record_with_media.record, width));
                 }
                 _ => {}
             }
@@ -135,6 +134,71 @@ impl PostViewComponent {
             ]))
         }
         Some(rows)
+    }
+    fn images_lines(images: &images::View) -> Vec<Line> {
+        images
+            .images
+            .iter()
+            .map(|image| {
+                Line::from(vec![
+                    Span::from(format!("[{}](", image.alt)),
+                    Span::from(image.fullsize.as_str()).underlined(),
+                    Span::from(")"),
+                ])
+            })
+            .collect()
+    }
+    fn external_lines(external: &external::View) -> Vec<Line> {
+        vec![
+            Line::from(
+                Span::from(external.external.uri.as_str())
+                    .dim()
+                    .underlined(),
+            ),
+            Line::from(external.external.title.as_str()).bold(),
+            Line::from(external.external.description.as_str()),
+        ]
+    }
+    fn record_lines(record: &record::View, width: u16) -> Vec<Line> {
+        match &record.record {
+            Union::Refs(ViewRecordRefs::ViewRecord(view_record)) => {
+                if let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &view_record.value {
+                    return [
+                        vec![
+                            Line::from(
+                                view_record
+                                    .indexed_at
+                                    .as_ref()
+                                    .with_timezone(&Local)
+                                    .format("%Y-%m-%d %H:%M:%S %z")
+                                    .to_string(),
+                            )
+                            .green(),
+                            Line::from(profile_name(&view_record.author)),
+                        ],
+                        textwrap::wrap(&record.text, usize::from(width))
+                            .iter()
+                            .map(|s| Line::from(s.to_string()))
+                            .collect::<Vec<_>>(),
+                    ]
+                    .concat();
+                }
+            }
+            Union::Refs(ViewRecordRefs::AppBskyFeedDefsGeneratorView(_)) => {
+                // TODO
+            }
+            Union::Refs(ViewRecordRefs::AppBskyGraphDefsListView(_)) => {
+                // TODO
+            }
+            Union::Refs(ViewRecordRefs::AppBskyLabelerDefsLabelerView(_)) => {
+                // TODO
+            }
+            Union::Refs(ViewRecordRefs::AppBskyGraphDefsStarterPackViewBasic(_)) => {
+                // TODO
+            }
+            _ => {}
+        }
+        Vec::new()
     }
 }
 
