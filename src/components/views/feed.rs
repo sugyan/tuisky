@@ -1,5 +1,5 @@
 use super::types::{Action, Data, Transition, View};
-use super::utils::profile_name;
+use super::utils::{profile_name, profile_name_as_str};
 use super::ViewComponent;
 use crate::backend::types::SavedFeedValue;
 use crate::backend::Watcher;
@@ -74,16 +74,7 @@ impl FeedViewComponent {
             &feed_view_post.reason
         {
             lines.push(
-                Line::from(format!(
-                    "  Reposted by {}",
-                    repost
-                        .by
-                        .display_name
-                        .as_ref()
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or(&repost.by.handle.as_str().to_string())
-                ))
-                .blue(),
+                Line::from(format!("  Reposted by {}", profile_name_as_str(&repost.by))).blue(),
             );
         }
         if let Some(reply) = &feed_view_post.reply {
@@ -225,11 +216,7 @@ impl ViewComponent for FeedViewComponent {
                 Span::from(" "),
                 Span::from(format!(
                     "by {}",
-                    generator_view
-                        .creator
-                        .display_name
-                        .clone()
-                        .unwrap_or(generator_view.creator.handle.as_ref().to_string())
+                    profile_name_as_str(&generator_view.creator)
                 ))
                 .dim(),
             ]),

@@ -1,7 +1,8 @@
 use super::types::Transition;
-use super::utils::profile_name;
+use super::utils::{profile_name, profile_name_as_str};
 use super::{types::Action, ViewComponent};
 use crate::backend::Watcher;
+use bsky_sdk::api::app::bsky::actor::defs::ProfileViewBasic;
 use bsky_sdk::api::app::bsky::embed::record::{self, ViewRecordRefs};
 use bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs;
 use bsky_sdk::api::app::bsky::embed::{external, images};
@@ -12,18 +13,47 @@ use bsky_sdk::api::records::{KnownRecord, Record};
 use bsky_sdk::api::types::Union;
 use chrono::Local;
 use color_eyre::Result;
-use ratatui::layout::{Constraint, Layout, Margin, Rect};
-use ratatui::style::{Color, Stylize};
+use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
+use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, Borders, Cell, Padding, Paragraph, Row, Table, TableState};
+use ratatui::widgets::{
+    Block, Borders, Cell, List, ListItem, ListState, Padding, Paragraph, Row, Table, TableState,
+};
 use ratatui::Frame;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 
+enum PostAction {
+    Profile(ProfileViewBasic),
+    Reply,
+    Repost,
+    Like,
+    Open(String),
+}
+
+impl<'a> From<&'a PostAction> for ListItem<'a> {
+    fn from(action: &'a PostAction) -> Self {
+        match action {
+            PostAction::Profile(profile) => Self::from(Line::from(vec![
+                Span::from("Show "),
+                Span::from(profile_name_as_str(profile)).bold(),
+                Span::from("'s profile"),
+            ]))
+            .dim(),
+            PostAction::Reply => Self::from("Reply").dim(),
+            PostAction::Repost => Self::from("Repost").dim(),
+            PostAction::Like => Self::from("Like").dim(),
+            PostAction::Open(uri) => Self::from(format!("Open {uri}")),
+        }
+    }
+}
+
 pub struct PostViewComponent {
     post_view: PostView,
     reply: Option<ReplyRef>,
-    state: TableState,
+    actions: Vec<PostAction>,
+    table_state: TableState,
+    list_state: ListState,
 }
 
 impl PostViewComponent {
@@ -33,11 +63,73 @@ impl PostViewComponent {
         post_view: PostView,
         reply: Option<ReplyRef>,
     ) -> Self {
+        let mut actions = vec![
+            PostAction::Profile(post_view.author.clone()),
+            PostAction::Reply,
+            PostAction::Repost,
+            PostAction::Like,
+        ];
+        if let Some(embed) = &post_view.embed {
+            match embed {
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
+                    for image in &images.images {
+                        actions.push(PostAction::Open(image.fullsize.clone()));
+                    }
+                }
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(external)) => {
+                    actions.push(PostAction::Open(external.external.uri.clone()));
+                }
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordView(record)) => {
+                    actions.extend(Self::record_actions(record));
+                }
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(
+                    record_with_media,
+                )) => {
+                    match &record_with_media.media {
+                        Union::Refs(ViewMediaRefs::AppBskyEmbedImagesView(images)) => {
+                            for image in &images.images {
+                                actions.push(PostAction::Open(image.fullsize.clone()));
+                            }
+                        }
+                        Union::Refs(ViewMediaRefs::AppBskyEmbedExternalView(external)) => {
+                            actions.push(PostAction::Open(external.external.uri.clone()));
+                        }
+                        _ => {}
+                    }
+                    actions.extend(Self::record_actions(&record_with_media.record));
+                }
+                _ => {}
+            }
+        }
         Self {
             post_view,
             reply,
-            state: TableState::default(),
+            actions,
+            table_state: TableState::default(),
+            list_state: ListState::default(),
         }
+    }
+    fn record_actions(record: &record::View) -> Vec<PostAction> {
+        let mut actions = Vec::new();
+        match &record.record {
+            Union::Refs(ViewRecordRefs::ViewRecord(record)) => {
+                // TODO
+            }
+            Union::Refs(ViewRecordRefs::AppBskyFeedDefsGeneratorView(_)) => {
+                // TODO
+            }
+            Union::Refs(ViewRecordRefs::AppBskyGraphDefsListView(_)) => {
+                // TODO
+            }
+            Union::Refs(ViewRecordRefs::AppBskyLabelerDefsLabelerView(_)) => {
+                // TODO
+            }
+            Union::Refs(ViewRecordRefs::AppBskyGraphDefsStarterPackViewBasic(_)) => {
+                // TODO
+            }
+            _ => {}
+        }
+        actions
     }
     fn post_view_rows(post_view: &PostView, width: u16) -> Option<Vec<Row>> {
         let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &post_view.record else {
@@ -205,9 +297,35 @@ impl PostViewComponent {
 impl ViewComponent for PostViewComponent {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::NextItem | Action::PrevItem => {}
+            Action::NextItem => self.list_state.select(Some(
+                self.list_state
+                    .selected()
+                    .map_or(0, |s| (s + 1) % self.actions.len()),
+            )),
+            Action::PrevItem => self.list_state.select(Some(
+                self.list_state
+                    .selected()
+                    .map_or(0, |s| (s + self.actions.len() - 1) % self.actions.len()),
+            )),
             Action::Back => {
                 return Ok(Some(Action::Transition(Transition::Pop)));
+            }
+            Action::Enter => {
+                if let Some(action) = self.list_state.selected().and_then(|i| self.actions.get(i)) {
+                    match action {
+                        PostAction::Like => {
+                            // TODO
+                        }
+                        PostAction::Open(uri) => {
+                            if let Err(e) = open::that(uri) {
+                                log::error!("failed to open: {e}");
+                            }
+                        }
+                        _ => {
+                            // TODO
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -227,12 +345,17 @@ impl ViewComponent for PostViewComponent {
                 }
             }
         }
+        self.table_state.select(Some(rows.len()));
         if let Some(r) = Self::post_view_rows(&self.post_view, width) {
             rows.extend(r);
         }
 
-        let layout =
-            Layout::vertical([Constraint::Length(2), Constraint::Percentage(100)]).split(area);
+        let layout = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Percentage(100),
+            Constraint::Min(10),
+        ])
+        .split(area);
         f.render_widget(
             Paragraph::new(self.post_view.uri.as_str()).bold().block(
                 Block::default()
@@ -242,7 +365,21 @@ impl ViewComponent for PostViewComponent {
             ),
             layout[0],
         );
-        f.render_stateful_widget(Table::new(rows, widths), layout[1], &mut self.state);
+        f.render_stateful_widget(Table::new(rows, widths), layout[1], &mut self.table_state);
+        f.render_stateful_widget(
+            List::new(&self.actions)
+                .highlight_style(Style::default().reversed())
+                .block(
+                    Block::default()
+                        .title("Actions")
+                        .title_alignment(Alignment::Center)
+                        .borders(Borders::TOP)
+                        .border_style(Color::Gray)
+                        .padding(Padding::horizontal(1)),
+                ),
+            layout[2],
+            &mut self.list_state,
+        );
         Ok(())
     }
 }
