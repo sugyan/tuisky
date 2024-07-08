@@ -246,6 +246,7 @@ feed_view_posts = 20
                     intervals: Intervals {
                         feed_view_posts: 20,
                         preferences: 60,
+                        post_thread: 60,
                     }
                 }
             }
@@ -275,6 +276,7 @@ feed_view_posts = 20
                 intervals: Intervals {
                     feed_view_posts: 10,
                     preferences: 10,
+                    post_thread: 180,
                 },
             },
         };
