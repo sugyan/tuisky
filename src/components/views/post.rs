@@ -11,12 +11,14 @@ use bsky_sdk::api::app::bsky::feed::defs::{
     PostView, PostViewData, PostViewEmbedRefs, ThreadViewPostParentRefs, ViewerStateData,
 };
 use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
+use bsky_sdk::api::app::bsky::richtext::facet::MainFeaturesItem;
 use bsky_sdk::api::records::{KnownRecord, Record};
 use bsky_sdk::api::types::string::Datetime;
 use bsky_sdk::api::types::{Collection, Union};
 use bsky_sdk::{api, BskyAgent};
 use chrono::Local;
 use color_eyre::Result;
+use indexmap::IndexSet;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
@@ -27,6 +29,7 @@ use ratatui::Frame;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 
+#[derive(Debug, Clone)]
 enum PostAction {
     Profile(ProfileViewBasic),
     Reply,
@@ -108,15 +111,36 @@ impl PostViewComponent {
                 PostAction::Like
             },
         ];
+        let mut links = IndexSet::new();
+        if let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &post_view.record {
+            if let Some(facets) = &record.facets {
+                for facet in facets {
+                    for feature in &facet.features {
+                        match feature {
+                            Union::Refs(MainFeaturesItem::Mention(_)) => {
+                                // TODO
+                            }
+                            Union::Refs(MainFeaturesItem::Link(link)) => {
+                                links.insert(link.uri.as_str());
+                            }
+                            Union::Refs(MainFeaturesItem::Tag(_)) => {
+                                // TODO
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
         if let Some(embed) = &post_view.embed {
             match embed {
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
                     for image in &images.images {
-                        actions.push(PostAction::Open(image.fullsize.clone()));
+                        links.insert(image.fullsize.as_str());
                     }
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(external)) => {
-                    actions.push(PostAction::Open(external.external.uri.clone()));
+                    links.insert(external.external.uri.as_str());
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordView(record)) => {
                     actions.extend(Self::record_actions(record));
@@ -127,11 +151,11 @@ impl PostViewComponent {
                     match &record_with_media.media {
                         Union::Refs(ViewMediaRefs::AppBskyEmbedImagesView(images)) => {
                             for image in &images.images {
-                                actions.push(PostAction::Open(image.fullsize.clone()));
+                                links.insert(image.fullsize.as_str());
                             }
                         }
                         Union::Refs(ViewMediaRefs::AppBskyEmbedExternalView(external)) => {
-                            actions.push(PostAction::Open(external.external.uri.clone()));
+                            links.insert(external.external.uri.as_str());
                         }
                         _ => {}
                     }
@@ -140,7 +164,14 @@ impl PostViewComponent {
                 _ => {}
             }
         }
-        actions
+        [
+            actions,
+            links
+                .iter()
+                .map(|s| PostAction::Open(s.to_string()))
+                .collect::<Vec<_>>(),
+        ]
+        .concat()
     }
     fn record_actions(record: &record::View) -> Vec<PostAction> {
         let mut actions = Vec::new();
@@ -231,6 +262,39 @@ impl PostViewComponent {
             rows.push(Row::default().height(labels.len() as u16).cells(vec![
                 Cell::from("Labels:".gray().into_right_aligned_line()),
                 Cell::from(labels.iter().map(|l| Line::from(l.val.as_str())).collect::<Vec<_>>()),
+            ]));
+        }
+        if let Some(facets) = &record.facets {
+            let lines = facets
+                .iter()
+                .map(|f| {
+                    Line::from(vec![
+                        Span::from(format!("[{}-{}] ", f.index.byte_start, f.index.byte_end))
+                            .cyan(),
+                        Span::from(
+                            f.features
+                                .iter()
+                                .map(|f| match f {
+                                    Union::Refs(MainFeaturesItem::Mention(mention)) => {
+                                        format!("Mention({})", mention.did.as_ref())
+                                    }
+                                    Union::Refs(MainFeaturesItem::Link(link)) => {
+                                        format!("Link({})", link.uri)
+                                    }
+                                    Union::Refs(MainFeaturesItem::Tag(tag)) => {
+                                        format!("Tag({})", tag.tag)
+                                    }
+                                    Union::Unknown(_) => String::from("Unknown"),
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        ),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            rows.push(Row::default().height(facets.len() as u16).cells(vec![
+                Cell::from("Facets".gray().into_right_aligned_line()),
+                Cell::from(lines),
             ]));
         }
         if let Some(embed) = &post_view.embed {
