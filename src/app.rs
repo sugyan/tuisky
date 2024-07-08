@@ -94,7 +94,7 @@ impl App {
                             // render main components to the left side
                             if let Err(e) = main_component.draw(f, layout[0]) {
                                 if let Err(e) =
-                                    action_tx.send(Action::Error(format!("failed to draw: {e:?}")))
+                                    action_tx.send(Action::Error(format!("failed to draw: {e}")))
                                 {
                                     log::error!("failed to send error: {e}");
                                 }
@@ -116,7 +116,7 @@ impl App {
                             for component in self.components.iter_mut() {
                                 if let Err(e) = component.draw(f, layout[0]) {
                                     if let Err(e) = action_tx
-                                        .send(Action::Error(format!("failed to draw: {e:?}")))
+                                        .send(Action::Error(format!("failed to draw: {e}")))
                                     {
                                         log::error!("failed to send error: {e}");
                                     }

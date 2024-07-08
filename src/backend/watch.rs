@@ -1,7 +1,10 @@
 use super::config::Config;
 use super::types::{SavedFeed, SavedFeedValue};
 use bsky_sdk::api::app::bsky::actor::defs::SavedFeedData;
-use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, FeedViewPostReasonRefs};
+use bsky_sdk::api::app::bsky::feed::defs::{
+    FeedViewPost, FeedViewPostReasonRefs, NotFoundPostData,
+};
+use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use bsky_sdk::api::types::string::Cid;
 use bsky_sdk::api::types::{Object, Union};
 use bsky_sdk::preference::Preferences;
@@ -84,7 +87,7 @@ impl Watcher {
                                 }
                             }
                             Err(e) => {
-                                log::warn!("failed to collect feeds {e:?}");
+                                log::warn!("failed to collect feeds: {e}");
                             }
                         }
                     }
@@ -104,10 +107,10 @@ impl Watcher {
         let (tx, rx) = watch::channel(init.clone());
         let agent = self.agent.clone();
         let feed = feed.clone();
-        let interval = self.config.intervals.feed_view_posts;
+        let mut interval =
+            time::interval(Duration::from_secs(self.config.intervals.feed_view_posts));
         let mut feed_map = init;
         tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_secs(interval));
             loop {
                 let tick = interval.tick();
                 tokio::select! {
@@ -119,12 +122,48 @@ impl Watcher {
                                 }
                             }
                             Err(e) => {
-                                log::warn!("failed to fetch feed views {e:?}");
+                                log::warn!("failed to fetch feed views: {e}");
                             }
                         }
                     }
                     _ = tx.closed() => {
                         return log::warn!("feed views channel closed");
+                    }
+                }
+            }
+        });
+        rx
+    }
+    pub fn post_thread(&self, uri: String) -> Receiver<Union<OutputThreadRefs>> {
+        let init = Union::Refs(OutputThreadRefs::AppBskyFeedDefsNotFoundPost(Box::new(
+            NotFoundPostData {
+                not_found: true,
+                uri: String::new(),
+            }
+            .into(),
+        )));
+        let (tx, rx) = watch::channel(init.clone());
+        let agent = self.agent.clone();
+        let uri = uri.clone();
+        let mut interval = time::interval(Duration::from_secs(self.config.intervals.post_thread));
+        tokio::spawn(async move {
+            loop {
+                let tick = interval.tick();
+                tokio::select! {
+                    _ = tick => {
+                        match get_post_thread(&agent, &uri).await {
+                            Ok(thread) => {
+                                if let Err(e) = tx.send(thread.clone()) {
+                                    log::warn!("failed to send post thread: {e}");
+                                }
+                            }
+                            Err(e) => {
+                                log::warn!("failed to get post thread: {e}");
+                            }
+                        }
+                    }
+                    _ = tx.closed() => {
+                        return log::warn!("post thread channel closed");
                     }
                 }
             }
@@ -261,6 +300,25 @@ fn update_feeds(feed_views: &[FeedViewPost], feed_map: &mut IndexMap<Cid, FeedVi
         }
         feed_map.insert(feed_view.post.cid.clone(), feed_view.clone());
     }
+}
+
+async fn get_post_thread(agent: &Arc<BskyAgent>, uri: &str) -> Result<Union<OutputThreadRefs>> {
+    Ok(agent
+        .api
+        .app
+        .bsky
+        .feed
+        .get_post_thread(
+            bsky_sdk::api::app::bsky::feed::get_post_thread::ParametersData {
+                depth: 10.try_into().ok(),
+                parent_height: None,
+                uri: uri.into(),
+            }
+            .into(),
+        )
+        .await?
+        .data
+        .thread)
 }
 
 #[cfg(test)]

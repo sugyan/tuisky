@@ -1,16 +1,20 @@
-use super::types::Transition;
+use super::types::{Transition, View};
 use super::utils::{profile_name, profile_name_as_str};
 use super::{types::Action, ViewComponent};
 use crate::backend::Watcher;
+use crate::components::views::types::Data;
+use bsky_sdk::api;
 use bsky_sdk::api::app::bsky::actor::defs::ProfileViewBasic;
 use bsky_sdk::api::app::bsky::embed::record::{self, ViewRecordRefs};
 use bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs;
 use bsky_sdk::api::app::bsky::embed::{external, images};
 use bsky_sdk::api::app::bsky::feed::defs::{
-    PostView, PostViewEmbedRefs, ReplyRef, ReplyRefParentRefs,
+    PostView, PostViewData, PostViewEmbedRefs, ThreadViewPostParentRefs,
 };
+use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use bsky_sdk::api::records::{KnownRecord, Record};
-use bsky_sdk::api::types::Union;
+use bsky_sdk::api::types::string::Datetime;
+use bsky_sdk::api::types::{Collection, Union};
 use chrono::Local;
 use color_eyre::Result;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
@@ -22,6 +26,7 @@ use ratatui::widgets::{
 use ratatui::Frame;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::task::JoinHandle;
 
 enum PostAction {
     Profile(ProfileViewBasic),
@@ -29,6 +34,7 @@ enum PostAction {
     Repost,
     Like,
     Open(String),
+    ViewRecord(record::ViewRecord),
 }
 
 impl<'a> From<&'a PostAction> for ListItem<'a> {
@@ -42,18 +48,27 @@ impl<'a> From<&'a PostAction> for ListItem<'a> {
             .dim(),
             PostAction::Reply => Self::from("Reply").dim(),
             PostAction::Repost => Self::from("Repost").dim(),
-            PostAction::Like => Self::from("Like").dim(),
+            PostAction::Like => Self::from("Like"),
             PostAction::Open(uri) => Self::from(format!("Open {uri}")),
+            PostAction::ViewRecord(view_record) => Self::from(Line::from(vec![
+                Span::from("Show "),
+                Span::from("embedded record").yellow(),
+                Span::from(" "),
+                Span::from(view_record.uri.as_str()).underlined(),
+            ])),
         }
     }
 }
 
 pub struct PostViewComponent {
     post_view: PostView,
-    reply: Option<ReplyRef>,
+    reply: Option<PostView>,
     actions: Vec<PostAction>,
     table_state: TableState,
     list_state: ListState,
+    action_tx: UnboundedSender<Action>,
+    watcher: Arc<Watcher>,
+    handle: Option<JoinHandle<()>>,
 }
 
 impl PostViewComponent {
@@ -61,7 +76,7 @@ impl PostViewComponent {
         action_tx: UnboundedSender<Action>,
         watcher: Arc<Watcher>,
         post_view: PostView,
-        reply: Option<ReplyRef>,
+        reply: Option<PostView>,
     ) -> Self {
         let mut actions = vec![
             PostAction::Profile(post_view.author.clone()),
@@ -107,13 +122,16 @@ impl PostViewComponent {
             actions,
             table_state: TableState::default(),
             list_state: ListState::default(),
+            action_tx,
+            watcher,
+            handle: None,
         }
     }
     fn record_actions(record: &record::View) -> Vec<PostAction> {
         let mut actions = Vec::new();
         match &record.record {
-            Union::Refs(ViewRecordRefs::ViewRecord(record)) => {
-                // TODO
+            Union::Refs(ViewRecordRefs::ViewRecord(view_record)) => {
+                actions.push(PostAction::ViewRecord(view_record.as_ref().clone()));
             }
             Union::Refs(ViewRecordRefs::AppBskyFeedDefsGeneratorView(_)) => {
                 // TODO
@@ -295,6 +313,28 @@ impl PostViewComponent {
 }
 
 impl ViewComponent for PostViewComponent {
+    fn activate(&mut self) -> Result<()> {
+        let (tx, mut rx) = (
+            self.action_tx.clone(),
+            self.watcher.post_thread(self.post_view.uri.clone()),
+        );
+        self.handle = Some(tokio::spawn(async move {
+            while rx.changed().await.is_ok() {
+                if let Err(e) = tx.send(Action::Update(Box::new(Data::PostThread(
+                    rx.borrow_and_update().clone(),
+                )))) {
+                    log::error!("failed to send update action: {e}");
+                }
+            }
+        }));
+        Ok(())
+    }
+    fn deactivate(&mut self) -> Result<()> {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+        Ok(())
+    }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::NextItem => self.list_state.select(Some(
@@ -307,24 +347,102 @@ impl ViewComponent for PostViewComponent {
                     .selected()
                     .map_or(0, |s| (s + self.actions.len() - 1) % self.actions.len()),
             )),
-            Action::Back => {
-                return Ok(Some(Action::Transition(Transition::Pop)));
-            }
             Action::Enter => {
                 if let Some(action) = self.list_state.selected().and_then(|i| self.actions.get(i)) {
                     match action {
                         PostAction::Like => {
-                            // TODO
+                            let agent = self.watcher.agent.clone();
+                            let record = Record::Known(KnownRecord::AppBskyFeedLike(Box::new(
+                                api::app::bsky::feed::like::RecordData {
+                                    created_at: Datetime::now(),
+                                    subject: api::com::atproto::repo::strong_ref::MainData {
+                                        cid: self.post_view.cid.clone(),
+                                        uri: self.post_view.uri.clone(),
+                                    }
+                                    .into(),
+                                }
+                                .into(),
+                            )));
+                            tokio::spawn(async move {
+                                let Some(session) = agent.get_session().await else {
+                                    return;
+                                };
+                                match agent
+                                    .api
+                                    .com
+                                    .atproto
+                                    .repo
+                                    .create_record(
+                                        api::com::atproto::repo::create_record::InputData {
+                                            collection: api::app::bsky::feed::Like::nsid(),
+                                            record,
+                                            repo: session.data.did.into(),
+                                            rkey: None,
+                                            swap_commit: None,
+                                            validate: None,
+                                        }
+                                        .into(),
+                                    )
+                                    .await
+                                {
+                                    Ok(output) => {
+                                        log::info!("created like record: {output:?}");
+                                    }
+                                    Err(e) => {
+                                        log::error!("failed to create like record: {e}");
+                                    }
+                                }
+                            });
                         }
                         PostAction::Open(uri) => {
                             if let Err(e) = open::that(uri) {
                                 log::error!("failed to open: {e}");
                             }
                         }
+                        PostAction::ViewRecord(view_record) => {
+                            return Ok(Some(Action::Transition(Transition::Push(Box::new(
+                                View::Post(Box::new((
+                                    PostViewData {
+                                        author: view_record.author.clone(),
+                                        cid: view_record.cid.clone(),
+                                        embed: None,
+                                        indexed_at: view_record.indexed_at.clone(),
+                                        labels: view_record.labels.clone(),
+                                        like_count: view_record.like_count,
+                                        record: view_record.value.clone(),
+                                        reply_count: view_record.reply_count,
+                                        repost_count: view_record.repost_count,
+                                        threadgate: None,
+                                        uri: view_record.uri.clone(),
+                                        viewer: None,
+                                    }
+                                    .into(),
+                                    None,
+                                ))),
+                            )))));
+                        }
                         _ => {
                             // TODO
                         }
                     }
+                }
+            }
+            Action::Back => {
+                return Ok(Some(Action::Transition(Transition::Pop)));
+            }
+            Action::Update(data) => {
+                let Data::PostThread(Union::Refs(OutputThreadRefs::AppBskyFeedDefsThreadViewPost(
+                    thread_view,
+                ))) = data.as_ref()
+                else {
+                    return Ok(None);
+                };
+                self.post_view = thread_view.post.clone();
+                // TODO: update actions with updated post_view's embeds
+                if let Some(Union::Refs(ThreadViewPostParentRefs::ThreadViewPost(parent))) =
+                    &thread_view.parent
+                {
+                    self.reply = Some(parent.post.clone());
                 }
             }
             _ => {}
@@ -337,12 +455,10 @@ impl ViewComponent for PostViewComponent {
 
         let mut rows = Vec::new();
         if let Some(reply) = &self.reply {
-            if let Union::Refs(ReplyRefParentRefs::PostView(post_view)) = &reply.parent {
-                if let Some(r) = Self::post_view_rows(post_view, width) {
-                    rows.push(Row::new([" Reply to".blue()]));
-                    rows.extend(r);
-                    rows.push(Row::new([" --------- ".blue()]));
-                }
+            if let Some(r) = Self::post_view_rows(reply, width) {
+                rows.push(Row::new([" Reply to".blue()]));
+                rows.extend(r);
+                rows.push(Row::new([" --------- ".blue()]));
             }
         }
         self.table_state.select(Some(rows.len()));

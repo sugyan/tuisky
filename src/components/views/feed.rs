@@ -180,7 +180,15 @@ impl ViewComponent for FeedViewComponent {
                     return Ok(Some(Action::Transition(Transition::Push(Box::new(
                         View::Post(Box::new((
                             feed_view_post.post.clone(),
-                            feed_view_post.reply.clone(),
+                            feed_view_post
+                                .reply
+                                .as_ref()
+                                .and_then(|reply| match &reply.parent {
+                                    Union::Refs(ReplyRefParentRefs::PostView(post_view)) => {
+                                        Some(post_view.as_ref().clone())
+                                    }
+                                    _ => None,
+                                }),
                         ))),
                     )))));
                 }
