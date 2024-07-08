@@ -1,5 +1,5 @@
 use crate::backend::types::{SavedFeed, SavedFeedValue};
-use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, PostView};
+use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, PostView, ViewerState};
 use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use bsky_sdk::api::types::string::Cid;
 use bsky_sdk::api::types::Union;
@@ -45,6 +45,7 @@ pub enum Data {
     SavedFeeds(Vec<SavedFeed>),
     FeedViews(IndexMap<Cid, FeedViewPost>),
     PostThread(Union<OutputThreadRefs>),
+    ViewerState(Option<ViewerState>),
 }
 
 #[derive(Debug, Clone)]

@@ -1,20 +1,20 @@
 use super::types::{Transition, View};
 use super::utils::{profile_name, profile_name_as_str};
 use super::{types::Action, ViewComponent};
-use crate::backend::Watcher;
+use crate::backend::{PostThreadWatcher, Watcher};
 use crate::components::views::types::Data;
-use bsky_sdk::api;
 use bsky_sdk::api::app::bsky::actor::defs::ProfileViewBasic;
 use bsky_sdk::api::app::bsky::embed::record::{self, ViewRecordRefs};
 use bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs;
 use bsky_sdk::api::app::bsky::embed::{external, images};
 use bsky_sdk::api::app::bsky::feed::defs::{
-    PostView, PostViewData, PostViewEmbedRefs, ThreadViewPostParentRefs,
+    PostView, PostViewData, PostViewEmbedRefs, ThreadViewPostParentRefs, ViewerStateData,
 };
 use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use bsky_sdk::api::records::{KnownRecord, Record};
 use bsky_sdk::api::types::string::Datetime;
 use bsky_sdk::api::types::{Collection, Union};
+use bsky_sdk::{api, BskyAgent};
 use chrono::Local;
 use color_eyre::Result;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
@@ -26,13 +26,13 @@ use ratatui::widgets::{
 use ratatui::Frame;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::task::JoinHandle;
 
 enum PostAction {
     Profile(ProfileViewBasic),
     Reply,
     Repost,
     Like,
+    Unlike(String),
     Open(String),
     ViewRecord(record::ViewRecord),
 }
@@ -49,6 +49,7 @@ impl<'a> From<&'a PostAction> for ListItem<'a> {
             PostAction::Reply => Self::from("Reply").dim(),
             PostAction::Repost => Self::from("Repost").dim(),
             PostAction::Like => Self::from("Like"),
+            PostAction::Unlike(_) => Self::from("Unlike"),
             PostAction::Open(uri) => Self::from(format!("Open {uri}")),
             PostAction::ViewRecord(view_record) => Self::from(Line::from(vec![
                 Span::from("Show "),
@@ -67,8 +68,8 @@ pub struct PostViewComponent {
     table_state: TableState,
     list_state: ListState,
     action_tx: UnboundedSender<Action>,
-    watcher: Arc<Watcher>,
-    handle: Option<JoinHandle<()>>,
+    agent: Arc<BskyAgent>,
+    watcher: Arc<PostThreadWatcher>,
 }
 
 impl PostViewComponent {
@@ -78,11 +79,34 @@ impl PostViewComponent {
         post_view: PostView,
         reply: Option<PostView>,
     ) -> Self {
+        let actions = Self::post_view_actions(&post_view);
+        let agent = watcher.agent.clone();
+        let watcher = Arc::new(watcher.post_thread(post_view.uri.clone()));
+        Self {
+            post_view,
+            reply,
+            actions,
+            table_state: TableState::default(),
+            list_state: ListState::default(),
+            action_tx,
+            agent,
+            watcher,
+        }
+    }
+    fn post_view_actions(post_view: &PostView) -> Vec<PostAction> {
+        let mut liked = None;
+        if let Some(viewer) = &post_view.viewer {
+            liked = viewer.like.as_ref();
+        }
         let mut actions = vec![
             PostAction::Profile(post_view.author.clone()),
             PostAction::Reply,
             PostAction::Repost,
-            PostAction::Like,
+            if let Some(uri) = liked {
+                PostAction::Unlike(uri.clone())
+            } else {
+                PostAction::Like
+            },
         ];
         if let Some(embed) = &post_view.embed {
             match embed {
@@ -116,16 +140,7 @@ impl PostViewComponent {
                 _ => {}
             }
         }
-        Self {
-            post_view,
-            reply,
-            actions,
-            table_state: TableState::default(),
-            list_state: ListState::default(),
-            action_tx,
-            watcher,
-            handle: None,
-        }
+        actions
     }
     fn record_actions(record: &record::View) -> Vec<PostAction> {
         let mut actions = Vec::new();
@@ -157,6 +172,12 @@ impl PostViewComponent {
         if let Some(display_name) = &post_view.author.display_name {
             author_lines.push(Line::from(display_name.as_str()).bold());
         }
+        let mut liked = false;
+        if let Some(viewer) = &post_view.viewer {
+            if viewer.like.is_some() {
+                liked = true;
+            }
+        }
         let text_lines = textwrap::wrap(&record.text, usize::from(width));
         let mut rows = vec![
             Row::new(vec![
@@ -186,7 +207,13 @@ impl PostViewComponent {
                     Span::from(" replies, ").dim(),
                     Span::from(post_view.repost_count.unwrap_or_default().to_string()),
                     Span::from(" reposts, ").dim(),
-                    Span::from(post_view.like_count.unwrap_or_default().to_string()),
+                    Span::from(post_view.like_count.unwrap_or_default().to_string()).style(
+                        if liked {
+                            Style::default().fg(Color::Red)
+                        } else {
+                            Style::default()
+                        },
+                    ),
                     Span::from(" likes").dim(),
                 ])),
             ]),
@@ -314,11 +341,8 @@ impl PostViewComponent {
 
 impl ViewComponent for PostViewComponent {
     fn activate(&mut self) -> Result<()> {
-        let (tx, mut rx) = (
-            self.action_tx.clone(),
-            self.watcher.post_thread(self.post_view.uri.clone()),
-        );
-        self.handle = Some(tokio::spawn(async move {
+        let (tx, mut rx) = (self.action_tx.clone(), self.watcher.subscribe());
+        tokio::spawn(async move {
             while rx.changed().await.is_ok() {
                 if let Err(e) = tx.send(Action::Update(Box::new(Data::PostThread(
                     rx.borrow_and_update().clone(),
@@ -326,13 +350,12 @@ impl ViewComponent for PostViewComponent {
                     log::error!("failed to send update action: {e}");
                 }
             }
-        }));
+            log::debug!("subscription finished");
+        });
         Ok(())
     }
     fn deactivate(&mut self) -> Result<()> {
-        if let Some(handle) = self.handle.take() {
-            handle.abort();
-        }
+        self.watcher.unsubscribe();
         Ok(())
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
@@ -351,7 +374,16 @@ impl ViewComponent for PostViewComponent {
                 if let Some(action) = self.list_state.selected().and_then(|i| self.actions.get(i)) {
                     match action {
                         PostAction::Like => {
-                            let agent = self.watcher.agent.clone();
+                            let (agent, tx) = (self.agent.clone(), self.action_tx.clone());
+                            let mut viewer = self.post_view.viewer.clone().unwrap_or(
+                                ViewerStateData {
+                                    like: None,
+                                    reply_disabled: None,
+                                    repost: None,
+                                    thread_muted: None,
+                                }
+                                .into(),
+                            );
                             let record = Record::Known(KnownRecord::AppBskyFeedLike(Box::new(
                                 api::app::bsky::feed::like::RecordData {
                                     created_at: Datetime::now(),
@@ -386,7 +418,56 @@ impl ViewComponent for PostViewComponent {
                                     .await
                                 {
                                     Ok(output) => {
-                                        log::info!("created like record: {output:?}");
+                                        log::info!("created like record: {}", output.cid.as_ref());
+                                        viewer.like = Some(output.uri.clone());
+                                        tx.send(Action::Update(Box::new(Data::ViewerState(Some(
+                                            viewer,
+                                        )))))
+                                        .ok();
+                                    }
+                                    Err(e) => {
+                                        log::error!("failed to create like record: {e}");
+                                    }
+                                }
+                            });
+                        }
+                        PostAction::Unlike(uri) => {
+                            let (agent, tx) = (self.agent.clone(), self.action_tx.clone());
+                            let mut viewer = self.post_view.viewer.clone();
+                            let Some(rkey) = uri.split('/').last().map(String::from) else {
+                                log::error!("failed to get rkey from uri: {uri}");
+                                return Ok(None);
+                            };
+                            tokio::spawn(async move {
+                                let Some(session) = agent.get_session().await else {
+                                    return;
+                                };
+                                match agent
+                                    .api
+                                    .com
+                                    .atproto
+                                    .repo
+                                    .delete_record(
+                                        api::com::atproto::repo::delete_record::InputData {
+                                            collection: api::app::bsky::feed::Like::nsid(),
+                                            repo: session.data.did.into(),
+                                            rkey,
+                                            swap_commit: None,
+                                            swap_record: None,
+                                        }
+                                        .into(),
+                                    )
+                                    .await
+                                {
+                                    Ok(_) => {
+                                        log::info!("deleted like record");
+                                        if let Some(viewer) = viewer.as_mut() {
+                                            viewer.like = None;
+                                        }
+                                        tx.send(Action::Update(Box::new(Data::ViewerState(
+                                            viewer,
+                                        ))))
+                                        .ok();
                                     }
                                     Err(e) => {
                                         log::error!("failed to create like record: {e}");
@@ -431,19 +512,38 @@ impl ViewComponent for PostViewComponent {
                 return Ok(Some(Action::Transition(Transition::Pop)));
             }
             Action::Update(data) => {
-                let Data::PostThread(Union::Refs(OutputThreadRefs::AppBskyFeedDefsThreadViewPost(
-                    thread_view,
-                ))) = data.as_ref()
-                else {
-                    return Ok(None);
-                };
-                self.post_view = thread_view.post.clone();
-                // TODO: update actions with updated post_view's embeds
-                if let Some(Union::Refs(ThreadViewPostParentRefs::ThreadViewPost(parent))) =
-                    &thread_view.parent
-                {
-                    self.reply = Some(parent.post.clone());
+                match data.as_ref() {
+                    Data::PostThread(Union::Refs(
+                        OutputThreadRefs::AppBskyFeedDefsThreadViewPost(thread_view),
+                    )) => {
+                        self.post_view = thread_view.post.clone();
+                        if let Some(Union::Refs(ThreadViewPostParentRefs::ThreadViewPost(parent))) =
+                            &thread_view.parent
+                        {
+                            self.reply = Some(parent.post.clone());
+                        }
+                    }
+                    Data::ViewerState(viewer) => {
+                        let diff = i64::from(
+                            viewer
+                                .as_ref()
+                                .map(|v| v.like.is_some())
+                                .unwrap_or_default(),
+                        ) - i64::from(
+                            self.post_view
+                                .viewer
+                                .as_ref()
+                                .map(|v| v.like.is_some())
+                                .unwrap_or_default(),
+                        );
+                        self.post_view.like_count =
+                            Some(self.post_view.like_count.unwrap_or_default() + diff);
+                        self.post_view.viewer.clone_from(viewer);
+                    }
+                    _ => return Ok(None),
                 }
+                self.actions = Self::post_view_actions(&self.post_view);
+                return Ok(Some(Action::Render));
             }
             _ => {}
         }
