@@ -28,6 +28,7 @@ use ratatui::widgets::{
 use ratatui::Frame;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot;
 
 #[derive(Debug, Clone)]
 enum PostAction {
@@ -73,6 +74,7 @@ pub struct PostViewComponent {
     action_tx: UnboundedSender<Action>,
     agent: Arc<BskyAgent>,
     watcher: Arc<PostThreadWatcher>,
+    quit: Option<oneshot::Sender<()>>,
 }
 
 impl PostViewComponent {
@@ -94,6 +96,7 @@ impl PostViewComponent {
             action_tx,
             agent,
             watcher,
+            quit: None,
         }
     }
     fn post_view_actions(post_view: &PostView) -> Vec<PostAction> {
@@ -406,12 +409,25 @@ impl PostViewComponent {
 impl ViewComponent for PostViewComponent {
     fn activate(&mut self) -> Result<()> {
         let (tx, mut rx) = (self.action_tx.clone(), self.watcher.subscribe());
+        let (quit_tx, mut quit_rx) = oneshot::channel();
+        self.quit = Some(quit_tx);
         tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                if let Err(e) = tx.send(Action::Update(Box::new(Data::PostThread(
-                    rx.borrow_and_update().clone(),
-                )))) {
-                    log::error!("failed to send update action: {e}");
+            loop {
+                tokio::select! {
+                    changed = rx.changed() => {
+                        if changed.is_ok() {
+                            if let Err(e) = tx.send(Action::Update(Box::new(Data::PostThread(
+                                rx.borrow_and_update().clone(),
+                            )))) {
+                                log::error!("failed to send update action: {e}");
+                            }
+                        } else {
+                            break log::warn!("post thread channel closed");
+                        }
+                    }
+                    _ = &mut quit_rx => {
+                        break;
+                    }
                 }
             }
             log::debug!("subscription finished");
@@ -419,6 +435,9 @@ impl ViewComponent for PostViewComponent {
         Ok(())
     }
     fn deactivate(&mut self) -> Result<()> {
+        if let Some(tx) = self.quit.take() {
+            tx.send(()).ok();
+        }
         self.watcher.unsubscribe();
         Ok(())
     }
