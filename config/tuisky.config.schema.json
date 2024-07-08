@@ -46,7 +46,8 @@
                 "NextInput",
                 "PrevInput",
                 "Enter",
-                "Back"
+                "Back",
+                "Refresh"
               ]
             }
           },

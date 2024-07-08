@@ -360,16 +360,22 @@ impl ViewComponent for PostViewComponent {
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::NextItem => self.list_state.select(Some(
-                self.list_state
-                    .selected()
-                    .map_or(0, |s| (s + 1) % self.actions.len()),
-            )),
-            Action::PrevItem => self.list_state.select(Some(
-                self.list_state
-                    .selected()
-                    .map_or(0, |s| (s + self.actions.len() - 1) % self.actions.len()),
-            )),
+            Action::NextItem => {
+                self.list_state.select(Some(
+                    self.list_state
+                        .selected()
+                        .map_or(0, |s| (s + 1) % self.actions.len()),
+                ));
+                return Ok(Some(Action::Render));
+            }
+            Action::PrevItem => {
+                self.list_state.select(Some(
+                    self.list_state
+                        .selected()
+                        .map_or(0, |s| (s + self.actions.len() - 1) % self.actions.len()),
+                ));
+                return Ok(Some(Action::Render));
+            }
             Action::Enter => {
                 if let Some(action) = self.list_state.selected().and_then(|i| self.actions.get(i)) {
                     match action {
@@ -510,6 +516,9 @@ impl ViewComponent for PostViewComponent {
             }
             Action::Back => {
                 return Ok(Some(Action::Transition(Transition::Pop)));
+            }
+            Action::Refresh => {
+                self.watcher.refresh();
             }
             Action::Update(data) => {
                 match data.as_ref() {

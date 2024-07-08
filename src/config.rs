@@ -170,6 +170,7 @@ pub enum ColumnAction {
     PrevInput,
     Enter,
     Back,
+    Refresh,
 }
 
 impl From<&ColumnAction> for ViewAction {
@@ -181,6 +182,7 @@ impl From<&ColumnAction> for ViewAction {
             ColumnAction::PrevInput => Self::PrevInput,
             ColumnAction::Enter => Self::Enter,
             ColumnAction::Back => Self::Back,
+            ColumnAction::Refresh => Self::Refresh,
         }
     }
 }
