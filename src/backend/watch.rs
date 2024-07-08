@@ -17,7 +17,7 @@ use tokio::time;
 
 pub struct Watcher {
     pub agent: Arc<BskyAgent>,
-    config: Config,
+    pub(crate) config: Config,
     preferences: Sender<Preferences>,
     handles: Vec<JoinHandle<()>>,
 }
@@ -43,7 +43,7 @@ impl Watcher {
                         _ = preferences_tick => {
                             if let Ok(prefs) = agent.get_preferences(true).await {
                                 if let Err(e) = tx.send(prefs.clone()) {
-                                    log::error!("failed to send preferences data: {e}");
+                                    log::warn!("failed to send preferences data: {e}");
                                 }
                             } else {
                                 log::warn!("failed to get preferences");
@@ -80,11 +80,11 @@ impl Watcher {
                         match collect_feeds(&agent, &saved_feeds).await {
                             Ok(feeds) => {
                                 if let Err(e) = tx.send(feeds) {
-                                    log::error!("failed to send saved feeds: {e}");
+                                    log::warn!("failed to send saved feeds: {e}");
                                 }
                             }
                             Err(e) => {
-                                log::warn!("failed to collect feeds {e:?}");
+                                log::warn!("failed to collect feeds: {e}");
                             }
                         }
                     }
@@ -104,10 +104,10 @@ impl Watcher {
         let (tx, rx) = watch::channel(init.clone());
         let agent = self.agent.clone();
         let feed = feed.clone();
-        let interval = self.config.intervals.feed_view_posts;
+        let mut interval =
+            time::interval(Duration::from_secs(self.config.intervals.feed_view_posts));
         let mut feed_map = init;
         tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_secs(interval));
             loop {
                 let tick = interval.tick();
                 tokio::select! {
@@ -115,11 +115,11 @@ impl Watcher {
                         match fetch_feed_views(&agent, &feed, &mut feed_map).await {
                             Ok(()) => {
                                 if let Err(e) = tx.send(feed_map.clone()) {
-                                    log::error!("failed to send feed views: {e}");
+                                    log::warn!("failed to send feed views: {e}");
                                 }
                             }
                             Err(e) => {
-                                log::warn!("failed to fetch feed views {e:?}");
+                                log::warn!("failed to fetch feed views: {e}");
                             }
                         }
                     }

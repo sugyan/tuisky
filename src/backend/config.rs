@@ -10,6 +10,7 @@ pub struct Config {
 pub struct Intervals {
     pub preferences: u64,
     pub feed_view_posts: u64,
+    pub post_thread: u64,
 }
 
 impl Default for Intervals {
@@ -17,6 +18,7 @@ impl Default for Intervals {
         Self {
             preferences: 60,
             feed_view_posts: 30,
+            post_thread: 60,
         }
     }
 }

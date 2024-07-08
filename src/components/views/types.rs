@@ -1,6 +1,8 @@
 use crate::backend::types::{SavedFeed, SavedFeedValue};
-use bsky_sdk::api::app::bsky::feed::defs::FeedViewPost;
+use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, PostView, ViewerState};
+use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use bsky_sdk::api::types::string::Cid;
+use bsky_sdk::api::types::Union;
 use bsky_sdk::BskyAgent;
 use indexmap::IndexMap;
 use std::fmt::{Debug, Formatter, Result};
@@ -14,6 +16,7 @@ pub enum Action {
     PrevInput,
     Enter,
     Back,
+    Refresh,
     Login(Box<BskyAgent>),
     Logout,
     Update(Box<Data>),
@@ -26,10 +29,11 @@ impl Debug for Action {
             Action::Render => write!(f, "Render"),
             Action::NextItem => write!(f, "NextItem"),
             Action::PrevItem => write!(f, "PrevItem"),
-            Action::Back => write!(f, "Back"),
             Action::NextInput => write!(f, "NextInput"),
             Action::PrevInput => write!(f, "PrevInput"),
             Action::Enter => write!(f, "Enter"),
+            Action::Back => write!(f, "Back"),
+            Action::Refresh => write!(f, "Refresh"),
             Action::Login(_) => write!(f, "Login"),
             Action::Logout => write!(f, "Logout"),
             Action::Update(_) => write!(f, "Update"),
@@ -42,6 +46,8 @@ impl Debug for Action {
 pub enum Data {
     SavedFeeds(Vec<SavedFeed>),
     FeedViews(IndexMap<Cid, FeedViewPost>),
+    PostThread(Union<OutputThreadRefs>),
+    ViewerState(Option<ViewerState>),
 }
 
 #[derive(Debug, Clone)]
@@ -55,4 +61,5 @@ pub enum Transition {
 pub enum View {
     Root,
     Feed(Box<SavedFeedValue>),
+    Post(Box<(PostView, Option<PostView>)>),
 }

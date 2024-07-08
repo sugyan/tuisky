@@ -1,4 +1,5 @@
 use super::types::{Action, Transition, View};
+use super::utils::profile_name_as_str;
 use super::ViewComponent;
 use crate::backend::types::{SavedFeed, SavedFeedValue};
 use crate::backend::Watcher;
@@ -114,11 +115,7 @@ impl ViewComponent for RootComponent {
                     Span::from(" "),
                     Span::from(format!(
                         "by {}",
-                        generator_view
-                            .creator
-                            .display_name
-                            .clone()
-                            .unwrap_or(generator_view.creator.handle.as_ref().to_string())
+                        profile_name_as_str(&generator_view.creator)
                     ))
                     .dim(),
                 ])])),

@@ -7,7 +7,7 @@ use bsky_sdk::agent::config::Config as AgentConfig;
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::Color;
+use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Block, BorderType};
 use ratatui::Frame;
 use serde::{Deserialize, Serialize};
@@ -150,7 +150,7 @@ impl Component for MainComponent {
             if self.state.selected == Some(i) {
                 block = block
                     .border_type(BorderType::Double)
-                    .border_style(Color::White);
+                    .border_style(Style::default().reset().bold());
             }
             view.draw(f, block.inner(*area))?;
             f.render_widget(block, *area);

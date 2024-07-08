@@ -1,5 +1,6 @@
 use super::views::feed::FeedViewComponent;
 use super::views::login::LoginComponent;
+use super::views::post::PostViewComponent;
 use super::views::root::RootComponent;
 use super::views::types::{Action as ViewAction, Transition, View};
 use super::views::ViewComponent;
@@ -121,6 +122,15 @@ impl ColumnComponent {
                 watcher.clone(),
                 feed.as_ref().clone(),
             )),
+            View::Post(boxed) => {
+                let (post_view, reply) = boxed.as_ref();
+                Box::new(PostViewComponent::new(
+                    self.view_tx.clone(),
+                    watcher.clone(),
+                    post_view.clone(),
+                    reply.clone(),
+                ))
+            }
         })
     }
 }

@@ -1,9 +1,8 @@
-use super::types::{Action, Data, Transition};
-use super::utils::profile_name;
+use super::types::{Action, Data, Transition, View};
+use super::utils::{profile_name, profile_name_as_str};
 use super::ViewComponent;
 use crate::backend::types::SavedFeedValue;
 use crate::backend::Watcher;
-use bsky_sdk::api::app::bsky::embed::record::ViewRecordRefs;
 use bsky_sdk::api::app::bsky::feed::defs::{
     FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
 };
@@ -46,6 +45,85 @@ impl FeedViewComponent {
             feed,
             handle: None,
         }
+    }
+    fn lines(feed_view_post: &FeedViewPost, area: Rect) -> Option<Vec<Line>> {
+        let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &feed_view_post.post.record
+        else {
+            return None;
+        };
+        let mut lines = vec![Line::from(
+            [
+                vec![
+                    Span::from(
+                        feed_view_post
+                            .post
+                            .indexed_at
+                            .as_ref()
+                            .with_timezone(&Local)
+                            .format("%Y-%m-%d %H:%M:%S %z")
+                            .to_string(),
+                    )
+                    .green(),
+                    Span::from(": "),
+                ],
+                profile_name(&feed_view_post.post.author),
+            ]
+            .concat(),
+        )];
+        if let Some(Union::Refs(FeedViewPostReasonRefs::ReasonRepost(repost))) =
+            &feed_view_post.reason
+        {
+            lines.push(
+                Line::from(format!("  Reposted by {}", profile_name_as_str(&repost.by))).blue(),
+            );
+        }
+        if let Some(reply) = &feed_view_post.reply {
+            if let Union::Refs(ReplyRefParentRefs::PostView(post_view)) = &reply.parent {
+                lines.push(Line::from(
+                    [
+                        vec![Span::from("  Reply to ").blue()],
+                        profile_name(&post_view.author),
+                    ]
+                    .concat(),
+                ));
+            }
+        }
+        lines.extend(
+            textwrap::wrap(
+                &record.text,
+                Options::new(usize::from(area.width) - 2)
+                    .initial_indent("  ")
+                    .subsequent_indent("  "),
+            )
+            .iter()
+            .map(|s| Line::from(s.to_string())),
+        );
+        if let Some(embed) = &feed_view_post.post.embed {
+            let content = match embed {
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
+                    format!("{} images", images.images.len())
+                }
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(_)) => {
+                    String::from("external")
+                }
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordView(_)) => String::from("record"),
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(_)) => {
+                    String::from("recordWithMedia")
+                }
+                _ => String::from("unknown"),
+            };
+            lines.push(Line::from(format!("  Embedded {content}")).yellow());
+        }
+        lines.push(
+            Line::from(format!(
+                "   💬{:<4} 🔁{:<4} 🩷{:<4}",
+                feed_view_post.post.reply_count.unwrap_or_default(),
+                feed_view_post.post.repost_count.unwrap_or_default(),
+                feed_view_post.post.like_count.unwrap_or_default()
+            ))
+            .dim(),
+        );
+        Some(lines)
     }
 }
 
@@ -92,6 +170,29 @@ impl ViewComponent for FeedViewComponent {
                 ));
                 return Ok(Some(Action::Render));
             }
+            Action::Enter => {
+                if let Some(feed_view_post) = self
+                    .state
+                    .selected()
+                    .and_then(|i| self.items.get_index(self.items.len() - 1 - i))
+                    .map(|(_, feed_view_post)| feed_view_post)
+                {
+                    return Ok(Some(Action::Transition(Transition::Push(Box::new(
+                        View::Post(Box::new((
+                            feed_view_post.post.clone(),
+                            feed_view_post
+                                .reply
+                                .as_ref()
+                                .and_then(|reply| match &reply.parent {
+                                    Union::Refs(ReplyRefParentRefs::PostView(post_view)) => {
+                                        Some(post_view.as_ref().clone())
+                                    }
+                                    _ => None,
+                                }),
+                        ))),
+                    )))));
+                }
+            }
             Action::Back => return Ok(Some(Action::Transition(Transition::Pop))),
             Action::Update(data) => {
                 let Data::FeedViews(feed_map) = data.as_ref() else {
@@ -117,179 +218,13 @@ impl ViewComponent for FeedViewComponent {
         Ok(None)
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        let mut items = Vec::new();
-        for feed_view_post in self.items.values().rev() {
-            let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &feed_view_post.post.record
-            else {
-                continue;
-            };
-            let mut lines = vec![Line::from(
-                [
-                    vec![
-                        Span::from(
-                            feed_view_post
-                                .post
-                                .indexed_at
-                                .as_ref()
-                                .with_timezone(&Local)
-                                .format("%Y-%m-%d %H:%M:%S %z")
-                                .to_string(),
-                        )
-                        .green(),
-                        Span::from(": "),
-                    ],
-                    profile_name(&feed_view_post.post.author),
-                ]
-                .concat(),
-            )];
-            if let Some(Union::Refs(FeedViewPostReasonRefs::ReasonRepost(repost))) =
-                &feed_view_post.reason
-            {
-                lines.push(
-                    Line::from(format!(
-                        "  Reposted by {}",
-                        repost
-                            .by
-                            .display_name
-                            .as_ref()
-                            .filter(|s| !s.is_empty())
-                            .unwrap_or(&repost.by.handle.as_str().to_string())
-                    ))
-                    .blue(),
-                );
-            }
-            if let Some(reply) = &feed_view_post.reply {
-                if let Union::Refs(ReplyRefParentRefs::PostView(post_view)) = &reply.parent {
-                    lines.push(Line::from(
-                        [
-                            vec![
-                                Span::from("  Reply to ").blue(),
-                                Span::from(
-                                    post_view
-                                        .indexed_at
-                                        .as_ref()
-                                        .with_timezone(&Local)
-                                        .format("%H:%M:%S %z")
-                                        .to_string(),
-                                )
-                                .green(),
-                                Span::from(": "),
-                            ],
-                            profile_name(&post_view.author),
-                        ]
-                        .concat(),
-                    ));
-                    if let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &post_view.record {
-                        lines.extend(
-                            textwrap::wrap(
-                                &record.text,
-                                Options::new(usize::from(area.width) - 2)
-                                    .initial_indent("    ")
-                                    .subsequent_indent("    "),
-                            )
-                            .iter()
-                            .map(|s| Line::from(s.to_string())),
-                        );
-                    }
-                }
-            }
-            lines.extend(
-                textwrap::wrap(
-                    &record.text,
-                    Options::new(usize::from(area.width) - 2)
-                        .initial_indent("  ")
-                        .subsequent_indent("  "),
-                )
-                .iter()
-                .map(|s| Line::from(s.to_string())),
-            );
-            if let Some(embed) = &feed_view_post.post.embed {
-                match embed {
-                    Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
-                        lines.push(Line::from("  embedded images:").yellow());
-                        for image in &images.images {
-                            lines.push(Line::from(vec![
-                                Span::from(format!("    - ![{}](", image.alt)),
-                                Span::from(image.thumb.as_str()).underlined(),
-                                Span::from(")"),
-                            ]))
-                        }
-                    }
-                    Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(external)) => {
-                        lines.push(Line::from("  embedded external content:").yellow());
-                        lines.push(Line::from(vec![
-                            Span::from("    "),
-                            Span::from(external.external.uri.as_str()).underlined(),
-                        ]));
-                        lines.push(Line::from(format!("    {}", external.external.title)).bold());
-                        lines.push(Line::from(format!("    {}", external.external.description)));
-                    }
-                    Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordView(record)) => {
-                        lines.push(Line::from("  embedded record:").yellow());
-                        if let Union::Refs(ViewRecordRefs::ViewRecord(view_record)) = &record.record
-                        {
-                            if let Record::Known(KnownRecord::AppBskyFeedPost(post)) =
-                                &view_record.value
-                            {
-                                lines.push(Line::from(
-                                    [
-                                        vec![
-                                            Span::from(format!(
-                                                "    {}",
-                                                view_record
-                                                    .indexed_at
-                                                    .as_ref()
-                                                    .with_timezone(&Local)
-                                                    .format("%Y-%m-%d %H:%M:%S %z")
-                                            ))
-                                            .green(),
-                                            Span::from(": "),
-                                        ],
-                                        profile_name(&view_record.author),
-                                    ]
-                                    .concat(),
-                                ));
-                                lines.extend(
-                                    textwrap::wrap(
-                                        &post.text,
-                                        Options::new(usize::from(area.width) - 2)
-                                            .initial_indent("      ")
-                                            .subsequent_indent("      "),
-                                    )
-                                    .iter()
-                                    .map(|s| Line::from(s.to_string())),
-                                );
-                            }
-                        }
-                    }
-                    Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(_)) => {
-                        lines.push(Line::from("  embedded record with media").yellow());
-                    }
-                    _ => {}
-                }
-            }
-            lines.push(
-                Line::from(format!(
-                    "   💬{:<4} 🔁{:<4} 🩷{:<4}",
-                    feed_view_post.post.reply_count.unwrap_or_default(),
-                    feed_view_post.post.repost_count.unwrap_or_default(),
-                    feed_view_post.post.like_count.unwrap_or_default()
-                ))
-                .dim(),
-            );
-            items.push(Text::from(lines));
-        }
         let header = Paragraph::new(match &self.feed {
             SavedFeedValue::Feed(generator_view) => Line::from(vec![
                 Span::from(generator_view.display_name.clone()).bold(),
                 Span::from(" "),
                 Span::from(format!(
                     "by {}",
-                    generator_view
-                        .creator
-                        .display_name
-                        .clone()
-                        .unwrap_or(generator_view.creator.handle.as_ref().to_string())
+                    profile_name_as_str(&generator_view.creator)
                 ))
                 .dim(),
             ]),
@@ -303,6 +238,12 @@ impl ViewComponent for FeedViewComponent {
                 .border_style(Color::Gray)
                 .padding(Padding::horizontal(1)),
         );
+        let mut items = Vec::new();
+        for feed_view_post in self.items.values().rev() {
+            if let Some(lines) = Self::lines(feed_view_post, area) {
+                items.push(Text::from(lines));
+            }
+        }
 
         let layout =
             Layout::vertical([Constraint::Length(2), Constraint::Percentage(100)]).split(area);
