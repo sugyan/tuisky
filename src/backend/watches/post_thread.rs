@@ -1,4 +1,4 @@
-use super::Watcher;
+use super::super::Watcher;
 use bsky_sdk::api::app::bsky::feed::defs::NotFoundPostData;
 use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use bsky_sdk::api::types::Union;
@@ -10,8 +10,8 @@ use tokio::time;
 
 #[derive(Debug, Clone)]
 enum Command {
-    Refresh,
     Quit,
+    Refresh,
 }
 
 pub struct PostThreadWatcher {

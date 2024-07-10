@@ -1,24 +1,29 @@
 use super::config::Config;
-use super::types::{SavedFeed, SavedFeedValue};
-use bsky_sdk::api::app::bsky::actor::defs::SavedFeedData;
+use super::types::SavedFeedValue;
 use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, FeedViewPostReasonRefs};
 use bsky_sdk::api::types::string::Cid;
-use bsky_sdk::api::types::{Object, Union};
+use bsky_sdk::api::types::Union;
 use bsky_sdk::preference::Preferences;
 use bsky_sdk::BskyAgent;
 use bsky_sdk::Result;
 use indexmap::IndexMap;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::watch::{self, Receiver, Sender};
+use tokio::sync::watch::{self, Receiver};
 use tokio::task::JoinHandle;
 use tokio::time;
+
+pub trait Watch {
+    type Output;
+
+    fn subscribe(&self) -> watch::Receiver<Self::Output>;
+    fn unsubscribe(&self);
+    fn refresh(&self);
+}
 
 pub struct Watcher {
     pub agent: Arc<BskyAgent>,
     pub(crate) config: Config,
-    preferences: Sender<Preferences>,
     handles: Vec<JoinHandle<()>>,
 }
 
@@ -56,7 +61,6 @@ impl Watcher {
         Self {
             agent,
             config,
-            preferences,
             handles,
         }
     }
@@ -64,37 +68,6 @@ impl Watcher {
         for handle in &self.handles {
             handle.abort();
         }
-    }
-    pub fn saved_feeds(&self, init: Vec<SavedFeed>) -> Receiver<Vec<SavedFeed>> {
-        let (tx, rx) = watch::channel(init);
-        let agent = self.agent.clone();
-        let mut preferences = self.preferences.subscribe();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    changed = preferences.changed() => {
-                        if changed.is_err()  {
-                            return log::warn!("preferences channel closed");
-                        }
-                        let saved_feeds = preferences.borrow_and_update().saved_feeds.clone();
-                        match collect_feeds(&agent, &saved_feeds).await {
-                            Ok(feeds) => {
-                                if let Err(e) = tx.send(feeds) {
-                                    log::warn!("failed to send saved feeds: {e}");
-                                }
-                            }
-                            Err(e) => {
-                                log::warn!("failed to collect feeds: {e}");
-                            }
-                        }
-                    }
-                    _ = tx.closed() => {
-                        return log::warn!("saved feeds channel closed");
-                    }
-                }
-            }
-        });
-        rx
     }
     pub fn feed_views(
         &self,
@@ -131,63 +104,6 @@ impl Watcher {
         });
         rx
     }
-}
-
-async fn collect_feeds(
-    agent: &Arc<BskyAgent>,
-    saved_feeds: &[Object<SavedFeedData>],
-) -> Result<Vec<SavedFeed>> {
-    let feeds = saved_feeds
-        .iter()
-        .filter_map(|feed| {
-            if feed.r#type == "feed" {
-                Some(feed.value.clone())
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-    let feed_generators = agent
-        .api
-        .app
-        .bsky
-        .feed
-        .get_feed_generators(
-            bsky_sdk::api::app::bsky::feed::get_feed_generators::ParametersData { feeds }.into(),
-        )
-        .await
-        .map(|output| {
-            output
-                .feeds
-                .iter()
-                .map(|feed| (feed.uri.clone(), feed.clone()))
-                .collect::<HashMap<_, _>>()
-        })?;
-    // TODO: list
-    let mut feeds = Vec::new();
-    for data in saved_feeds {
-        match data.r#type.as_str() {
-            "feed" => {
-                if let Some(feed) = feed_generators.get(&data.value) {
-                    feeds.push(SavedFeed {
-                        pinned: data.pinned,
-                        value: SavedFeedValue::Feed(Box::new(feed.clone())),
-                    });
-                }
-            }
-            "list" => {
-                // TODO
-            }
-            "timeline" => {
-                feeds.push(SavedFeed {
-                    pinned: data.pinned,
-                    value: SavedFeedValue::Timeline(data.value.clone()),
-                });
-            }
-            _ => {}
-        }
-    }
-    Ok(feeds)
 }
 
 async fn fetch_feed_views(
