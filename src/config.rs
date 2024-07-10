@@ -247,7 +247,7 @@ feed_view_posts = 20
                 watcher: WatcherConfig {
                     intervals: Intervals {
                         feed_view_posts: 20,
-                        preferences: 60,
+                        preferences: 600,
                         post_thread: 60,
                     }
                 }

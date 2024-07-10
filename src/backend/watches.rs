@@ -1,3 +1,4 @@
+mod feed;
 mod moderator;
 pub mod post_thread;
 mod preferences;

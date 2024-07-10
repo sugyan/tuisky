@@ -16,7 +16,7 @@ pub struct Intervals {
 impl Default for Intervals {
     fn default() -> Self {
         Self {
-            preferences: 60,
+            preferences: 600,
             feed_view_posts: 30,
             post_thread: 60,
         }

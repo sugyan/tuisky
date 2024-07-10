@@ -46,6 +46,7 @@ impl Debug for Action {
 pub enum Data {
     SavedFeeds(Vec<SavedFeed>),
     FeedViews(IndexMap<Cid, FeedViewPost>),
+    Feed(Vec<FeedViewPost>),
     PostThread(Union<OutputThreadRefs>),
     ViewerState(Option<ViewerState>),
 }

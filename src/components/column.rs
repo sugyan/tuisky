@@ -165,9 +165,7 @@ impl Component for ColumnComponent {
                             if let Ok(mut session) = self.session.write() {
                                 session.take();
                             }
-                            if let Some(watcher) = self.watcher.take() {
-                                watcher.stop();
-                            }
+                            self.watcher.take();
                             self.views = vec![Box::new(LoginComponent::new(self.view_tx.clone()))];
                             return Ok(Some(Action::Render));
                         }

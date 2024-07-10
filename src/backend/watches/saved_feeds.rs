@@ -1,6 +1,4 @@
-use crate::backend::types::SavedFeedValue;
-
-use super::super::types::SavedFeed;
+use super::super::types::{SavedFeed, SavedFeedValue};
 use super::super::{Watch, Watcher};
 use bsky_sdk::api::app::bsky::actor::defs::SavedFeedData;
 use bsky_sdk::api::types::Object;
@@ -22,10 +20,7 @@ impl Watcher {
     }
 }
 
-pub struct SavedFeedsWatcher<W>
-where
-    W: Watch<Output = Preferences>,
-{
+pub struct SavedFeedsWatcher<W> {
     agent: Arc<BskyAgent>,
     preferences: W,
     tx: broadcast::Sender<()>,
@@ -57,7 +52,7 @@ where
                         }
                     }
                     _ = quit.recv() => {
-                        return log::debug!("quit");
+                        break;
                     }
                 }
             }
@@ -76,15 +71,13 @@ where
 }
 
 async fn update(
-    agent: &Arc<BskyAgent>,
+    agent: &BskyAgent,
     saved_feeds: &[Object<SavedFeedData>],
     tx: &Sender<Vec<SavedFeed>>,
 ) {
     match collect_feeds(agent, saved_feeds).await {
         Ok(feeds) => {
-            if let Err(e) = tx.send(feeds) {
-                log::error!("failed to send saved feeds: {e}");
-            }
+            tx.send(feeds).ok();
         }
         Err(e) => {
             log::error!("failed to collect feeds: {e}");
@@ -93,7 +86,7 @@ async fn update(
 }
 
 async fn collect_feeds(
-    agent: &Arc<BskyAgent>,
+    agent: &BskyAgent,
     saved_feeds: &[Object<SavedFeedData>],
 ) -> Result<Vec<SavedFeed>> {
     let feeds = saved_feeds

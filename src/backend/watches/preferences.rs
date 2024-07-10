@@ -44,18 +44,18 @@ impl Watch for PreferencesWatcher {
                             Command::Refresh => {
                                 let (agent, tx) = (agent.clone(), tx.clone());
                                 tokio::spawn(async move {
-                                    update(agent, tx).await;
+                                    update(&agent, &tx).await;
                                 });
                             }
                             Command::Quit => {
-                                return log::debug!("quit");
+                                break;
                             }
                         }
                     }
                     _ = tick => {
                         let (agent, tx) = (agent.clone(), tx.clone());
                         tokio::spawn(async move {
-                            update(agent, tx).await;
+                            update(&agent, &tx).await;
                         });
                     }
                 }
@@ -75,11 +75,9 @@ impl Watch for PreferencesWatcher {
     }
 }
 
-async fn update(agent: Arc<BskyAgent>, tx: watch::Sender<Preferences>) {
+async fn update(agent: &BskyAgent, tx: &watch::Sender<Preferences>) {
     if let Ok(preferences) = agent.get_preferences(true).await {
         agent.configure_labelers_from_preferences(&preferences);
-        if let Err(e) = tx.send(preferences) {
-            log::error!("failed to send preferences: {e}");
-        }
+        tx.send(preferences).ok();
     }
 }
