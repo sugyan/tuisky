@@ -50,8 +50,9 @@ impl FeedViewComponent {
         else {
             return None;
         };
-        let mut lines = vec![Line::from(
-            [
+        let mut lines = Vec::new();
+        {
+            let mut spans = [
                 vec![
                     Span::from(
                         feed_view_post
@@ -67,8 +68,19 @@ impl FeedViewComponent {
                 ],
                 profile_name(&feed_view_post.post.author),
             ]
-            .concat(),
-        )];
+            .concat();
+            if let Some(labels) = feed_view_post
+                .post
+                .author
+                .labels
+                .as_ref()
+                .filter(|v| !v.is_empty())
+            {
+                spans.push(Span::from(" "));
+                spans.push(format!("[{} labels]", labels.len()).magenta());
+            }
+            lines.push(Line::from(spans));
+        }
         if let Some(Union::Refs(FeedViewPostReasonRefs::ReasonRepost(repost))) =
             &feed_view_post.reason
         {
