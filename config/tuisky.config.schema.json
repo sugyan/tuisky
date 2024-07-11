@@ -70,7 +70,11 @@
             "type": "integer",
             "minimum": 1
           },
-          "feed_view_posts": {
+          "feed": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "post_thread": {
             "type": "integer",
             "minimum": 1
           }

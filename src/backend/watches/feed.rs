@@ -1,4 +1,4 @@
-use super::super::types::SavedFeedValue;
+use super::super::types::FeedDescriptor;
 use super::super::{Watch, Watcher};
 use bsky_sdk::api::app::bsky::feed::defs::{
     FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
@@ -11,15 +11,18 @@ use bsky_sdk::Result;
 use bsky_sdk::{preference::Preferences, BskyAgent};
 use indexmap::IndexMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{broadcast, watch, Mutex};
+use tokio::time;
 
 impl Watcher {
-    pub fn feed(&self, feed_value: SavedFeedValue) -> impl Watch<Output = Vec<FeedViewPost>> {
+    pub fn feed(&self, descriptor: FeedDescriptor) -> impl Watch<Output = Vec<FeedViewPost>> {
         let (tx, _) = broadcast::channel(1);
         FeedWatcher {
-            feed_value,
+            descriptor,
             agent: self.agent.clone(),
             preferences: self.preferences(),
+            period: Duration::from_secs(self.config.intervals.feed),
             tx,
             current: Default::default(),
         }
@@ -27,9 +30,10 @@ impl Watcher {
 }
 
 pub struct FeedWatcher<W> {
-    feed_value: SavedFeedValue,
+    descriptor: FeedDescriptor,
     agent: Arc<BskyAgent>,
     preferences: W,
+    period: Duration,
     tx: broadcast::Sender<()>,
     current: Arc<Mutex<IndexMap<Cid, FeedViewPost>>>,
 }
@@ -42,31 +46,40 @@ where
 
     fn subscribe(&self) -> tokio::sync::watch::Receiver<Self::Output> {
         let (tx, rx) = watch::channel(Default::default());
-        let (agent, current, feed_value) = (
+        let (agent, current, descriptor) = (
             self.agent.clone(),
             self.current.clone(),
-            Arc::new(self.feed_value.clone()),
+            Arc::new(self.descriptor.clone()),
         );
         let (mut preferences, mut quit) = (self.preferences.subscribe(), self.tx.subscribe());
-        // TODO interval
+        let mut interval = time::interval(self.period);
         tokio::spawn(async move {
+            // skip the first tick
+            interval.tick().await;
             loop {
+                let tick = interval.tick();
+                let (agent, current, descriptor, tx) = (
+                    agent.clone(),
+                    current.clone(),
+                    descriptor.clone(),
+                    tx.clone(),
+                );
                 tokio::select! {
                     changed = preferences.changed() => {
                         if changed.is_ok() {
                             let preferences = preferences.borrow_and_update().clone();
-                            let (agent, current, feed_value, tx) = (
-                                agent.clone(),
-                                current.clone(),
-                                feed_value.clone(),
-                                tx.clone(),
-                            );
                             tokio::spawn(async move {
-                                update(&agent, &current, &feed_value, &preferences, &tx).await;
+                                update(&agent, &current, &descriptor, &preferences, &tx).await;
                             });
                         } else {
                             break log::warn!("preferences channel closed");
                         }
+                    }
+                    _ = tick => {
+                        let preferences = preferences.borrow().clone();
+                        tokio::spawn(async move {
+                            update(&agent, &current, &descriptor, &preferences, &tx).await;
+                        });
                     }
                     _ = quit.recv() => {
                         break;
@@ -91,11 +104,11 @@ where
 async fn update(
     agent: &BskyAgent,
     current: &Mutex<IndexMap<Cid, FeedViewPost>>,
-    feed_value: &SavedFeedValue,
+    descriptor: &FeedDescriptor,
     preferences: &Preferences,
     tx: &watch::Sender<Vec<FeedViewPost>>,
 ) {
-    match calculate_feed(agent, current, feed_value, preferences).await {
+    match calculate_feed(agent, current, descriptor, preferences).await {
         Ok(feed) => {
             tx.send(feed).ok();
         }
@@ -108,10 +121,10 @@ async fn update(
 async fn calculate_feed(
     agent: &BskyAgent,
     current: &Mutex<IndexMap<Cid, FeedViewPost>>,
-    feed_value: &SavedFeedValue,
+    descriptor: &FeedDescriptor,
     preferences: &Preferences,
 ) -> Result<Vec<FeedViewPost>> {
-    let (moderator, feed) = tokio::join!(agent.moderator(preferences), get_feed(agent, feed_value));
+    let (moderator, feed) = tokio::join!(agent.moderator(preferences), get_feed(agent, descriptor));
     let moderator = moderator?;
     let mut feed = feed?;
     feed.reverse();
@@ -128,7 +141,7 @@ async fn calculate_feed(
         !ui.filter()
     });
     // filter by preferences (following timeline only)
-    if matches!(feed_value, SavedFeedValue::Timeline(_)) {
+    if matches!(descriptor, FeedDescriptor::Timeline(_)) {
         let pref = if let Some(pref) = preferences.feed_view_prefs.get("home") {
             pref.clone()
         } else {
@@ -139,9 +152,9 @@ async fn calculate_feed(
     Ok(ret)
 }
 
-async fn get_feed(agent: &BskyAgent, feed_value: &SavedFeedValue) -> Result<Vec<FeedViewPost>> {
-    Ok(match feed_value {
-        SavedFeedValue::Feed(generator_view) => {
+async fn get_feed(agent: &BskyAgent, descriptor: &FeedDescriptor) -> Result<Vec<FeedViewPost>> {
+    Ok(match descriptor {
+        FeedDescriptor::Feed(generator_view) => {
             agent
                 .api
                 .app
@@ -159,8 +172,8 @@ async fn get_feed(agent: &BskyAgent, feed_value: &SavedFeedValue) -> Result<Vec<
                 .data
                 .feed
         }
-        SavedFeedValue::List => Vec::new(),
-        SavedFeedValue::Timeline(_) => {
+        FeedDescriptor::List => Vec::new(),
+        FeedDescriptor::Timeline(_) => {
             agent
                 .api
                 .app

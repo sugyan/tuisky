@@ -38,11 +38,11 @@ impl Watch for PreferencesWatcher {
         tokio::spawn(async move {
             loop {
                 let tick = interval.tick();
+                let (agent, tx) = (agent.clone(), tx.clone());
                 tokio::select! {
                     Ok(command) = command.recv() => {
                         match command {
                             Command::Refresh => {
-                                let (agent, tx) = (agent.clone(), tx.clone());
                                 tokio::spawn(async move {
                                     update(&agent, &tx).await;
                                 });
@@ -53,7 +53,6 @@ impl Watch for PreferencesWatcher {
                         }
                     }
                     _ = tick => {
-                        let (agent, tx) = (agent.clone(), tx.clone());
                         tokio::spawn(async move {
                             update(&agent, &tx).await;
                         });

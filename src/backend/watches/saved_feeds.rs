@@ -1,4 +1,4 @@
-use super::super::types::{SavedFeed, SavedFeedValue};
+use super::super::types::{FeedDescriptor, SavedFeed};
 use super::super::{Watch, Watcher};
 use bsky_sdk::api::app::bsky::actor::defs::SavedFeedData;
 use bsky_sdk::api::types::Object;
@@ -123,7 +123,7 @@ async fn collect_feeds(
                 if let Some(feed) = feed_generators.get(&data.value) {
                     feeds.push(SavedFeed {
                         pinned: data.pinned,
-                        value: SavedFeedValue::Feed(Box::new(feed.clone())),
+                        value: FeedDescriptor::Feed(Box::new(feed.clone())),
                     });
                 }
             }
@@ -133,7 +133,7 @@ async fn collect_feeds(
             "timeline" => {
                 feeds.push(SavedFeed {
                     pinned: data.pinned,
-                    value: SavedFeedValue::Timeline(data.value.clone()),
+                    value: FeedDescriptor::Timeline(data.value.clone()),
                 });
             }
             _ => {}

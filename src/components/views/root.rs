@@ -1,7 +1,7 @@
 use super::types::{Action, Transition, View};
 use super::utils::profile_name_as_str;
 use super::ViewComponent;
-use crate::backend::types::{SavedFeed, SavedFeedValue};
+use crate::backend::types::{SavedFeed, FeedDescriptor};
 use crate::backend::{Watch, Watcher};
 use crate::components::views::types::Data;
 use color_eyre::Result;
@@ -129,7 +129,7 @@ impl ViewComponent for RootComponent {
             .items
             .iter()
             .filter_map(|feed| match &feed.value {
-                SavedFeedValue::Feed(generator_view) => Some(Text::from(vec![Line::from(vec![
+                FeedDescriptor::Feed(generator_view) => Some(Text::from(vec![Line::from(vec![
                     Span::from(generator_view.display_name.clone()).bold(),
                     Span::from(" "),
                     Span::from(format!(
@@ -138,8 +138,8 @@ impl ViewComponent for RootComponent {
                     ))
                     .dim(),
                 ])])),
-                SavedFeedValue::List => None,
-                SavedFeedValue::Timeline(value) => {
+                FeedDescriptor::List => None,
+                FeedDescriptor::Timeline(value) => {
                     Some(Text::from(vec![Line::from(value.clone()).bold()]))
                 }
             })

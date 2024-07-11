@@ -1,7 +1,7 @@
 use crate::tui;
 use color_eyre::{config::HookBuilder, eyre, Result};
 use directories::ProjectDirs;
-use std::{panic, path::PathBuf};
+use std::{panic, path::PathBuf, process};
 
 pub fn initialize_panic_handler() -> Result<()> {
     let (panic_hook, eyre_hook) = HookBuilder::default().into_hooks();
@@ -11,6 +11,7 @@ pub fn initialize_panic_handler() -> Result<()> {
     panic::set_hook(Box::new(move |panic_info| {
         tui::restore().expect("failed to restore terminal");
         panic_hook(panic_info);
+        process::exit(1);
     }));
     Ok(())
 }

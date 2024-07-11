@@ -213,7 +213,7 @@ Ctrl-p = "PrevItem"
 Left = "Back"
 
 [watcher.intervals]
-feed_view_posts = 20
+feed = 20
 "#;
         let config = toml::from_str::<Config>(input).expect("failed to deserialize config");
         assert_eq!(
@@ -246,8 +246,8 @@ feed_view_posts = 20
                 },
                 watcher: WatcherConfig {
                     intervals: Intervals {
-                        feed_view_posts: 20,
                         preferences: 600,
+                        feed: 20,
                         post_thread: 60,
                     }
                 }
@@ -276,7 +276,7 @@ feed_view_posts = 20
             },
             watcher: WatcherConfig {
                 intervals: Intervals {
-                    feed_view_posts: 10,
+                    feed: 10,
                     preferences: 10,
                     post_thread: 180,
                 },
