@@ -44,28 +44,32 @@ where
             }
             .into(),
         )));
-        let (watch_tx, watch_rx) = watch::channel(init.clone());
-        let (agent, uri) = (self.agent.clone(), self.uri.clone());
+        let (tx, rx) = watch::channel(init);
+        let updater = Updater {
+            agent: self.agent.clone(),
+            uri: self.uri.clone(),
+            tx: tx.clone(),
+        };
         let (mut preferences, mut quit) = (self.preferences.subscribe(), self.tx.subscribe());
         let mut interval = time::interval(self.period);
         tokio::spawn(async move {
             loop {
-                let (agent, uri, watch_tx) = (agent.clone(), uri.clone(), watch_tx.clone());
                 let tick = interval.tick();
                 tokio::select! {
                     changed = preferences.changed() => {
                         if changed.is_ok() {
+                            let updater = updater.clone();
                             tokio::spawn(async move {
-                                update(&agent, &uri, &watch_tx).await;
+                                updater.update().await;
                             });
                         } else {
                             break log::warn!("preferences channel closed");
                         }
                     }
                     _ = tick => {
-                        let (agent, uri, watch_tx) = (agent.clone(), uri.clone(), watch_tx.clone());
+                        let updater = updater.clone();
                         tokio::spawn(async move {
-                            update(&agent, &uri, &watch_tx).await;
+                            updater.update().await;
                         });
                     }
                     _ = quit.recv() => {
@@ -74,7 +78,7 @@ where
                 }
             }
         });
-        watch_rx
+        rx
     }
     fn unsubscribe(&self) {
         if let Err(e) = self.tx.send(()) {
@@ -87,34 +91,43 @@ where
     }
 }
 
-async fn update(agent: &Arc<BskyAgent>, uri: &str, tx: &watch::Sender<Union<OutputThreadRefs>>) {
-    match get_post_thread(agent, uri).await {
-        Ok(thread) => {
-            if let Err(e) = tx.send(thread.clone()) {
-                log::warn!("failed to send post thread: {e}");
-            }
-        }
-        Err(e) => {
-            log::warn!("failed to get post thread: {e}");
-        }
-    }
+#[derive(Clone)]
+struct Updater {
+    agent: Arc<BskyAgent>,
+    uri: String,
+    tx: watch::Sender<Union<OutputThreadRefs>>,
 }
 
-async fn get_post_thread(agent: &Arc<BskyAgent>, uri: &str) -> Result<Union<OutputThreadRefs>> {
-    Ok(agent
-        .api
-        .app
-        .bsky
-        .feed
-        .get_post_thread(
-            bsky_sdk::api::app::bsky::feed::get_post_thread::ParametersData {
-                depth: 10.try_into().ok(),
-                parent_height: None,
-                uri: uri.into(),
+impl Updater {
+    async fn update(&self) {
+        match self.get_post_thread().await {
+            Ok(thread) => {
+                if let Err(e) = self.tx.send(thread.clone()) {
+                    log::warn!("failed to send post thread: {e}");
+                }
             }
-            .into(),
-        )
-        .await?
-        .data
-        .thread)
+            Err(e) => {
+                log::warn!("failed to get post thread: {e}");
+            }
+        }
+    }
+    async fn get_post_thread(&self) -> Result<Union<OutputThreadRefs>> {
+        Ok(self
+            .agent
+            .api
+            .app
+            .bsky
+            .feed
+            .get_post_thread(
+                bsky_sdk::api::app::bsky::feed::get_post_thread::ParametersData {
+                    depth: 10.try_into().ok(),
+                    parent_height: None,
+                    uri: self.uri.clone(),
+                }
+                .into(),
+            )
+            .await?
+            .data
+            .thread)
+    }
 }

@@ -46,11 +46,12 @@ where
 
     fn subscribe(&self) -> tokio::sync::watch::Receiver<Self::Output> {
         let (tx, rx) = watch::channel(Default::default());
-        let (agent, current, descriptor) = (
-            self.agent.clone(),
-            self.current.clone(),
-            Arc::new(self.descriptor.clone()),
-        );
+        let updater = Updater {
+            agent: self.agent.clone(),
+            current: self.current.clone(),
+            descriptor: Arc::new(self.descriptor.clone()),
+            tx,
+        };
         let (mut preferences, mut quit) = (self.preferences.subscribe(), self.tx.subscribe());
         let mut interval = time::interval(self.period);
         tokio::spawn(async move {
@@ -58,18 +59,13 @@ where
             interval.tick().await;
             loop {
                 let tick = interval.tick();
-                let (agent, current, descriptor, tx) = (
-                    agent.clone(),
-                    current.clone(),
-                    descriptor.clone(),
-                    tx.clone(),
-                );
                 tokio::select! {
                     changed = preferences.changed() => {
                         if changed.is_ok() {
                             let preferences = preferences.borrow_and_update().clone();
+                            let updater = updater.clone();
                             tokio::spawn(async move {
-                                update(&agent, &current, &descriptor, &preferences, &tx).await;
+                                updater.clone().update(&preferences).await;
                             });
                         } else {
                             break log::warn!("preferences channel closed");
@@ -77,8 +73,9 @@ where
                     }
                     _ = tick => {
                         let preferences = preferences.borrow().clone();
+                        let updater = updater.clone();
                         tokio::spawn(async move {
-                            update(&agent, &current, &descriptor, &preferences, &tx).await;
+                            updater.update(&preferences).await;
                         });
                     }
                     _ = quit.recv() => {
@@ -101,98 +98,95 @@ where
     }
 }
 
-async fn update(
-    agent: &BskyAgent,
-    current: &Mutex<IndexMap<Cid, FeedViewPost>>,
-    descriptor: &FeedDescriptor,
-    preferences: &Preferences,
-    tx: &watch::Sender<Vec<FeedViewPost>>,
-) {
-    match calculate_feed(agent, current, descriptor, preferences).await {
-        Ok(feed) => {
-            tx.send(feed).ok();
-        }
-        Err(e) => {
-            log::error!("failed to get feed view posts: {e}");
-        }
-    }
+#[derive(Clone)]
+struct Updater {
+    agent: Arc<BskyAgent>,
+    current: Arc<Mutex<IndexMap<Cid, FeedViewPost>>>,
+    descriptor: Arc<FeedDescriptor>,
+    tx: watch::Sender<Vec<FeedViewPost>>,
 }
 
-async fn calculate_feed(
-    agent: &BskyAgent,
-    current: &Mutex<IndexMap<Cid, FeedViewPost>>,
-    descriptor: &FeedDescriptor,
-    preferences: &Preferences,
-) -> Result<Vec<FeedViewPost>> {
-    // TODO: It should not be necessary to get moderator every time unless moderation_prefs has been changed?
-    let (moderator, feed) = tokio::join!(agent.moderator(preferences), get_feed(agent, descriptor));
-    let moderator = moderator?;
-    let mut feed = feed?;
-    feed.reverse();
-    let mut ret = {
-        let mut feed_map = current.lock().await;
-        update_feeds(&feed, &mut feed_map);
-        feed_map.values().rev().cloned().collect::<Vec<_>>()
-    };
-    // filter by moderator
-    ret.retain(|feed_view_post| {
-        let decision = moderator.moderate_post(&feed_view_post.post);
-        let ui = decision.ui(DecisionContext::ContentList);
-        // TODO: use other results?
-        !ui.filter()
-    });
-    // filter by preferences (following timeline only)
-    if matches!(descriptor, FeedDescriptor::Timeline(_)) {
-        let pref = if let Some(pref) = preferences.feed_view_prefs.get("home") {
-            pref.clone()
-        } else {
-            FeedViewPreferenceData::default().into()
+impl Updater {
+    async fn update(&self, preferences: &Preferences) {
+        match self.calculate_feed(preferences).await {
+            Ok(feed) => {
+                self.tx.send(feed).ok();
+            }
+            Err(e) => {
+                log::error!("failed to get feed view posts: {e}");
+            }
+        }
+    }
+    async fn calculate_feed(&self, preferences: &Preferences) -> Result<Vec<FeedViewPost>> {
+        // TODO: It should not be necessary to get moderator every time unless moderation_prefs has been changed?
+        let (moderator, feed) = tokio::join!(self.agent.moderator(preferences), self.get_feed());
+        let moderator = moderator?;
+        let mut feed = feed?;
+        feed.reverse();
+        let mut ret = {
+            let mut feed_map = self.current.lock().await;
+            update_feeds(&feed, &mut feed_map);
+            feed_map.values().rev().cloned().collect::<Vec<_>>()
         };
-        ret.retain(|feed_view_post| filter_feed(feed_view_post, &pref));
+        // filter by moderator
+        ret.retain(|feed_view_post| {
+            let decision = moderator.moderate_post(&feed_view_post.post);
+            let ui = decision.ui(DecisionContext::ContentList);
+            // TODO: use other results?
+            !ui.filter()
+        });
+        // filter by preferences (following timeline only)
+        if matches!(self.descriptor.as_ref(), FeedDescriptor::Timeline(_)) {
+            let pref = if let Some(pref) = preferences.feed_view_prefs.get("home") {
+                pref.clone()
+            } else {
+                FeedViewPreferenceData::default().into()
+            };
+            ret.retain(|feed_view_post| filter_feed(feed_view_post, &pref));
+        }
+        Ok(ret)
     }
-    Ok(ret)
-}
-
-async fn get_feed(agent: &BskyAgent, descriptor: &FeedDescriptor) -> Result<Vec<FeedViewPost>> {
-    Ok(match descriptor {
-        FeedDescriptor::Feed(generator_view) => {
-            agent
-                .api
-                .app
-                .bsky
-                .feed
-                .get_feed(
-                    bsky_sdk::api::app::bsky::feed::get_feed::ParametersData {
-                        cursor: None,
-                        feed: generator_view.uri.clone(),
-                        limit: 30.try_into().ok(),
-                    }
-                    .into(),
-                )
-                .await?
-                .data
-                .feed
-        }
-        FeedDescriptor::List => Vec::new(),
-        FeedDescriptor::Timeline(_) => {
-            agent
-                .api
-                .app
-                .bsky
-                .feed
-                .get_timeline(
-                    bsky_sdk::api::app::bsky::feed::get_timeline::ParametersData {
-                        algorithm: None,
-                        cursor: None,
-                        limit: 30.try_into().ok(),
-                    }
-                    .into(),
-                )
-                .await?
-                .data
-                .feed
-        }
-    })
+    async fn get_feed(&self) -> Result<Vec<FeedViewPost>> {
+        Ok(match self.descriptor.as_ref() {
+            FeedDescriptor::Feed(generator_view) => {
+                self.agent
+                    .api
+                    .app
+                    .bsky
+                    .feed
+                    .get_feed(
+                        bsky_sdk::api::app::bsky::feed::get_feed::ParametersData {
+                            cursor: None,
+                            feed: generator_view.uri.clone(),
+                            limit: 30.try_into().ok(),
+                        }
+                        .into(),
+                    )
+                    .await?
+                    .data
+                    .feed
+            }
+            FeedDescriptor::List => Vec::new(),
+            FeedDescriptor::Timeline(_) => {
+                self.agent
+                    .api
+                    .app
+                    .bsky
+                    .feed
+                    .get_timeline(
+                        bsky_sdk::api::app::bsky::feed::get_timeline::ParametersData {
+                            algorithm: None,
+                            cursor: None,
+                            limit: 30.try_into().ok(),
+                        }
+                        .into(),
+                    )
+                    .await?
+                    .data
+                    .feed
+            }
+        })
+    }
 }
 
 fn update_feeds(feed: &[FeedViewPost], feed_map: &mut IndexMap<Cid, FeedViewPost>) {
