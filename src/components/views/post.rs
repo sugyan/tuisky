@@ -206,6 +206,15 @@ impl PostViewComponent {
         if let Some(display_name) = &post_view.author.display_name {
             author_lines.push(Line::from(display_name.as_str()).bold());
         }
+        if let Some(labels) = post_view.author.labels.as_ref().filter(|v| !v.is_empty()) {
+            for label in labels {
+                let mut spans = vec![Span::from(label.val.as_str()).magenta()];
+                if !label.uri.ends_with("/self") {
+                    spans.extend([Span::from(" "), format!("by {}", label.src.as_ref()).dim()]);
+                }
+                author_lines.push(Line::from(spans));
+            }
+        }
         let mut liked = false;
         if let Some(viewer) = &post_view.viewer {
             if viewer.like.is_some() {
@@ -261,10 +270,30 @@ impl PostViewComponent {
                 ),
             ]),
         ];
-        if let Some(labels) = &post_view.labels {
-            rows.push(Row::default().height(labels.len() as u16).cells(vec![
+        if let Some(langs) = record.langs.as_ref().filter(|v| !v.is_empty()) {
+            rows.push(Row::new(vec![
+                Cell::from("Langs:".gray().into_right_aligned_line()),
+                Cell::from(
+                    langs
+                        .iter()
+                        .map(|lang| lang.as_ref().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                ),
+            ]));
+        }
+        if let Some(labels) = post_view.labels.as_ref().filter(|v| !v.is_empty()) {
+            let mut lines = Vec::new();
+            for label in labels {
+                let mut spans = vec![Span::from(label.val.as_str()).magenta()];
+                if !label.uri.ends_with("/self") {
+                    spans.extend([Span::from(" "), format!("by {}", label.src.as_ref()).dim()]);
+                }
+                lines.push(Line::from(spans));
+            }
+            rows.push(Row::default().height(lines.len() as u16).cells(vec![
                 Cell::from("Labels:".gray().into_right_aligned_line()),
-                Cell::from(labels.iter().map(|l| Line::from(l.val.as_str())).collect::<Vec<_>>()),
+                Cell::from(lines),
             ]));
         }
         if let Some(facets) = &record.facets {
