@@ -1,8 +1,8 @@
 use super::types::{Action, Transition, View};
 use super::utils::profile_name_as_str;
 use super::ViewComponent;
-use crate::backend::types::{SavedFeed, SavedFeedValue};
-use crate::backend::Watcher;
+use crate::backend::types::{FeedDescriptor, SavedFeed};
+use crate::backend::{Watch, Watcher};
 use crate::components::views::types::Data;
 use color_eyre::Result;
 use ratatui::style::{Style, Stylize};
@@ -11,14 +11,14 @@ use ratatui::widgets::{Block, List, ListState, Padding};
 use ratatui::{layout::Rect, Frame};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::task::JoinHandle;
+use tokio::sync::oneshot;
 
 pub struct RootComponent {
     items: Vec<SavedFeed>,
     state: ListState,
     action_tx: UnboundedSender<Action>,
-    watcher: Arc<Watcher>,
-    handle: Option<JoinHandle<()>>,
+    watcher: Box<dyn Watch<Output = Vec<SavedFeed>>>,
+    quit: Option<oneshot::Sender<()>>,
 }
 
 impl RootComponent {
@@ -27,33 +27,51 @@ impl RootComponent {
             items: Vec::new(),
             state: ListState::default(),
             action_tx,
-            watcher,
-            handle: None,
+            watcher: Box::new(watcher.saved_feeds()),
+            quit: None,
         }
     }
 }
 
 impl ViewComponent for RootComponent {
     fn activate(&mut self) -> Result<()> {
-        let (tx, mut rx) = (
-            self.action_tx.clone(),
-            self.watcher.saved_feeds(self.items.clone()),
-        );
-        self.handle = Some(tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                if let Err(e) = tx.send(Action::Update(Box::new(Data::SavedFeeds(
-                    rx.borrow_and_update().clone(),
-                )))) {
-                    log::error!("failed to send update action: {e}");
+        let (tx, mut rx) = (self.action_tx.clone(), self.watcher.subscribe());
+        let (quit_tx, mut quit_rx) = oneshot::channel();
+        self.quit = Some(quit_tx);
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    changed = rx.changed() => {
+                        match changed {
+                            Ok(()) => {
+                                if let Err(e) = tx.send(Action::Update(Box::new(Data::SavedFeeds(
+                                    rx.borrow_and_update().clone(),
+                                )))) {
+                                    log::error!("failed to send update action: {e}");
+                                }
+                            }
+                            Err(e) => {
+                                log::warn!("changed channel error: {e}");
+                                break;
+                            }
+                        }
+                    }
+                    _ = &mut quit_rx => {
+                        break;
+                    }
                 }
             }
-        }));
+            log::debug!("subscription finished");
+        });
         Ok(())
     }
     fn deactivate(&mut self) -> Result<()> {
-        if let Some(handle) = self.handle.take() {
-            handle.abort();
+        if let Some(tx) = self.quit.take() {
+            if tx.send(()).is_err() {
+                log::error!("failed to send quit signal");
+            }
         }
+        self.watcher.unsubscribe();
         Ok(())
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
@@ -79,9 +97,7 @@ impl ViewComponent for RootComponent {
             Action::Enter if !self.items.is_empty() => {
                 if let Some(index) = self.state.selected() {
                     if index == self.items.len() {
-                        if let Some(handle) = self.handle.take() {
-                            handle.abort();
-                        }
+                        self.deactivate()?;
                         return Ok(Some(Action::Logout));
                     }
                     if let Some(feed) = self.items.get(index) {
@@ -90,6 +106,9 @@ impl ViewComponent for RootComponent {
                         )))));
                     }
                 }
+            }
+            Action::Refresh => {
+                self.watcher.refresh();
             }
             Action::Update(data) => {
                 let Data::SavedFeeds(feeds) = data.as_ref() else {
@@ -110,7 +129,7 @@ impl ViewComponent for RootComponent {
             .items
             .iter()
             .filter_map(|feed| match &feed.value {
-                SavedFeedValue::Feed(generator_view) => Some(Text::from(vec![Line::from(vec![
+                FeedDescriptor::Feed(generator_view) => Some(Text::from(vec![Line::from(vec![
                     Span::from(generator_view.display_name.clone()).bold(),
                     Span::from(" "),
                     Span::from(format!(
@@ -119,8 +138,8 @@ impl ViewComponent for RootComponent {
                     ))
                     .dim(),
                 ])])),
-                SavedFeedValue::List => None,
-                SavedFeedValue::Timeline(value) => {
+                FeedDescriptor::List => None,
+                FeedDescriptor::Timeline(value) => {
                     Some(Text::from(vec![Line::from(value.clone()).bold()]))
                 }
             })

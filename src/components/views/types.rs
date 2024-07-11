@@ -1,10 +1,8 @@
-use crate::backend::types::{SavedFeed, SavedFeedValue};
+use crate::backend::types::{SavedFeed, FeedDescriptor};
 use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, PostView, ViewerState};
 use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
-use bsky_sdk::api::types::string::Cid;
 use bsky_sdk::api::types::Union;
 use bsky_sdk::BskyAgent;
-use indexmap::IndexMap;
 use std::fmt::{Debug, Formatter, Result};
 
 #[derive(Clone)]
@@ -45,7 +43,7 @@ impl Debug for Action {
 #[derive(Debug, Clone)]
 pub enum Data {
     SavedFeeds(Vec<SavedFeed>),
-    FeedViews(IndexMap<Cid, FeedViewPost>),
+    Feed(Vec<FeedViewPost>),
     PostThread(Union<OutputThreadRefs>),
     ViewerState(Option<ViewerState>),
 }
@@ -60,6 +58,6 @@ pub enum Transition {
 #[derive(Debug, Clone)]
 pub enum View {
     Root,
-    Feed(Box<SavedFeedValue>),
+    Feed(Box<FeedDescriptor>),
     Post(Box<(PostView, Option<PostView>)>),
 }

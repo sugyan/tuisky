@@ -1,17 +1,15 @@
 use super::types::{Action, Data, Transition, View};
 use super::utils::{profile_name, profile_name_as_str};
 use super::ViewComponent;
-use crate::backend::types::SavedFeedValue;
-use crate::backend::Watcher;
+use crate::backend::types::FeedDescriptor;
+use crate::backend::{Watch, Watcher};
 use bsky_sdk::api::app::bsky::feed::defs::{
     FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
 };
 use bsky_sdk::api::records::{KnownRecord, Record};
-use bsky_sdk::api::types::string::Cid;
 use bsky_sdk::api::types::Union;
 use chrono::Local;
 use color_eyre::Result;
-use indexmap::IndexMap;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
@@ -20,30 +18,31 @@ use ratatui::Frame;
 use std::sync::Arc;
 use textwrap::Options;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::task::JoinHandle;
+use tokio::sync::oneshot;
 
 pub struct FeedViewComponent {
-    items: IndexMap<Cid, FeedViewPost>,
+    items: Vec<FeedViewPost>,
     state: ListState,
     action_tx: UnboundedSender<Action>,
-    watcher: Arc<Watcher>,
-    feed: SavedFeedValue,
-    handle: Option<JoinHandle<()>>,
+    descriptor: FeedDescriptor,
+    watcher: Box<dyn Watch<Output = Vec<FeedViewPost>>>,
+    quit: Option<oneshot::Sender<()>>,
 }
 
 impl FeedViewComponent {
     pub fn new(
         action_tx: UnboundedSender<Action>,
         watcher: Arc<Watcher>,
-        feed: SavedFeedValue,
+        descriptor: FeedDescriptor,
     ) -> Self {
+        let watcher = Box::new(watcher.feed(descriptor.clone()));
         Self {
-            items: IndexMap::new(),
+            items: Vec::new(),
             state: ListState::default(),
             action_tx,
+            descriptor,
             watcher,
-            feed,
-            handle: None,
+            quit: None,
         }
     }
     fn lines(feed_view_post: &FeedViewPost, area: Rect) -> Option<Vec<Line>> {
@@ -129,25 +128,43 @@ impl FeedViewComponent {
 
 impl ViewComponent for FeedViewComponent {
     fn activate(&mut self) -> Result<()> {
-        let (tx, mut rx) = (
-            self.action_tx.clone(),
-            self.watcher.feed_views(IndexMap::new(), &self.feed),
-        );
-        self.handle = Some(tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                if let Err(e) = tx.send(Action::Update(Box::new(Data::FeedViews(
-                    rx.borrow_and_update().clone(),
-                )))) {
-                    log::error!("failed to send update action: {e}");
+        let (tx, mut rx) = (self.action_tx.clone(), self.watcher.subscribe());
+        let (quit_tx, mut quit_rx) = oneshot::channel();
+        self.quit = Some(quit_tx);
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    changed = rx.changed() => {
+                        match changed {
+                            Ok(()) => {
+                                if let Err(e) = tx.send(Action::Update(Box::new(Data::Feed(
+                                    rx.borrow_and_update().clone(),
+                                )))) {
+                                    log::error!("failed to send update action: {e}");
+                                }
+                            }
+                            Err(e) => {
+                                log::warn!("changed channel error: {e}");
+                                break;
+                            }
+                        }
+                    }
+                    _ = &mut quit_rx => {
+                        break;
+                    }
                 }
             }
-        }));
+            log::debug!("subscription finished");
+        });
         Ok(())
     }
     fn deactivate(&mut self) -> Result<()> {
-        if let Some(handle) = self.handle.take() {
-            handle.abort();
+        if let Some(tx) = self.quit.take() {
+            if tx.send(()).is_err() {
+                log::error!("failed to send quit signal");
+            }
         }
+        self.watcher.unsubscribe();
         Ok(())
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
@@ -171,11 +188,7 @@ impl ViewComponent for FeedViewComponent {
                 return Ok(Some(Action::Render));
             }
             Action::Enter => {
-                if let Some(feed_view_post) = self
-                    .state
-                    .selected()
-                    .and_then(|i| self.items.get_index(self.items.len() - 1 - i))
-                    .map(|(_, feed_view_post)| feed_view_post)
+                if let Some(feed_view_post) = self.state.selected().and_then(|i| self.items.get(i))
                 {
                     return Ok(Some(Action::Transition(Transition::Push(Box::new(
                         View::Post(Box::new((
@@ -194,22 +207,27 @@ impl ViewComponent for FeedViewComponent {
                 }
             }
             Action::Back => return Ok(Some(Action::Transition(Transition::Pop))),
+            Action::Refresh => {
+                self.watcher.refresh();
+            }
             Action::Update(data) => {
-                let Data::FeedViews(feed_map) = data.as_ref() else {
+                let Data::Feed(feed) = data.as_ref() else {
                     return Ok(None);
                 };
-                log::info!("update feed views ({} items)", feed_map.len());
+                log::debug!("update feed view: {}", feed.len());
+                // TODO: update state.selected
                 let select = if let Some(cid) = self
                     .state
                     .selected()
-                    .and_then(|i| self.items.get_index(self.items.len() - 1 - i))
-                    .map(|(cid, _)| cid)
+                    .and_then(|i| self.items.get(i))
+                    .map(|feed_view_post| feed_view_post.post.cid.as_ref())
                 {
-                    self.items.get_index_of(cid).map(|i| feed_map.len() - 1 - i)
+                    feed.iter()
+                        .position(|feed_view_post| feed_view_post.post.cid.as_ref() == cid)
                 } else {
                     None
                 };
-                self.items.clone_from(feed_map);
+                self.items.clone_from(feed);
                 self.state.select(select);
                 return Ok(Some(Action::Render));
             }
@@ -218,8 +236,8 @@ impl ViewComponent for FeedViewComponent {
         Ok(None)
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        let header = Paragraph::new(match &self.feed {
-            SavedFeedValue::Feed(generator_view) => Line::from(vec![
+        let header = Paragraph::new(match &self.descriptor {
+            FeedDescriptor::Feed(generator_view) => Line::from(vec![
                 Span::from(generator_view.display_name.clone()).bold(),
                 Span::from(" "),
                 Span::from(format!(
@@ -228,8 +246,8 @@ impl ViewComponent for FeedViewComponent {
                 ))
                 .dim(),
             ]),
-            SavedFeedValue::List => Line::from(""),
-            SavedFeedValue::Timeline(value) => Line::from(value.as_str()),
+            FeedDescriptor::List => Line::from(""),
+            FeedDescriptor::Timeline(value) => Line::from(value.as_str()),
         })
         .bold()
         .block(
@@ -239,7 +257,7 @@ impl ViewComponent for FeedViewComponent {
                 .padding(Padding::horizontal(1)),
         );
         let mut items = Vec::new();
-        for feed_view_post in self.items.values().rev() {
+        for feed_view_post in &self.items {
             if let Some(lines) = Self::lines(feed_view_post, area) {
                 items.push(Text::from(lines));
             }

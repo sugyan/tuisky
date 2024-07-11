@@ -117,10 +117,10 @@ impl ColumnComponent {
             .ok_or_else(|| eyre::eyre!("watcher not initialized"))?;
         Ok(match view {
             View::Root => Box::new(RootComponent::new(self.view_tx.clone(), watcher.clone())),
-            View::Feed(feed) => Box::new(FeedViewComponent::new(
+            View::Feed(descriptor) => Box::new(FeedViewComponent::new(
                 self.view_tx.clone(),
                 watcher.clone(),
-                feed.as_ref().clone(),
+                descriptor.as_ref().clone(),
             )),
             View::Post(boxed) => {
                 let (post_view, reply) = boxed.as_ref();
@@ -165,9 +165,7 @@ impl Component for ColumnComponent {
                             if let Ok(mut session) = self.session.write() {
                                 session.take();
                             }
-                            if let Some(watcher) = self.watcher.take() {
-                                watcher.stop();
-                            }
+                            self.watcher.take();
                             self.views = vec![Box::new(LoginComponent::new(self.view_tx.clone()))];
                             return Ok(Some(Action::Render));
                         }
