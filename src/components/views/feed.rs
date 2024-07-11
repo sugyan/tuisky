@@ -207,12 +207,28 @@ impl ViewComponent for FeedViewComponent {
                 }
             }
             Action::Back => return Ok(Some(Action::Transition(Transition::Pop))),
+            Action::Refresh => {
+                self.watcher.refresh();
+            }
             Action::Update(data) => {
                 let Data::Feed(feed) = data.as_ref() else {
                     return Ok(None);
                 };
+                log::debug!("update feed view: {}", feed.len());
                 // TODO: update state.selected
+                let select = if let Some(cid) = self
+                    .state
+                    .selected()
+                    .and_then(|i| self.items.get(i))
+                    .map(|feed_view_post| feed_view_post.post.cid.as_ref())
+                {
+                    feed.iter()
+                        .position(|feed_view_post| feed_view_post.post.cid.as_ref() == cid)
+                } else {
+                    None
+                };
                 self.items.clone_from(feed);
+                self.state.select(select);
                 return Ok(Some(Action::Render));
             }
             _ => {}

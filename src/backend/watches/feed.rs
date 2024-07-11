@@ -1,13 +1,17 @@
 use super::super::types::SavedFeedValue;
 use super::super::{Watch, Watcher};
-use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, FeedViewPostReasonRefs};
+use bsky_sdk::api::app::bsky::feed::defs::{
+    FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
+};
 use bsky_sdk::api::types::string::Cid;
 use bsky_sdk::api::types::Union;
+use bsky_sdk::moderation::decision::DecisionContext;
+use bsky_sdk::preference::{FeedViewPreference, FeedViewPreferenceData};
 use bsky_sdk::Result;
 use bsky_sdk::{preference::Preferences, BskyAgent};
 use indexmap::IndexMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, watch};
+use tokio::sync::{broadcast, watch, Mutex};
 
 impl Watcher {
     pub fn feed(&self, feed_value: SavedFeedValue) -> impl Watch<Output = Vec<FeedViewPost>> {
@@ -17,6 +21,7 @@ impl Watcher {
             agent: self.agent.clone(),
             preferences: self.preferences(),
             tx,
+            current: Default::default(),
         }
     }
 }
@@ -26,6 +31,7 @@ pub struct FeedWatcher<W> {
     agent: Arc<BskyAgent>,
     preferences: W,
     tx: broadcast::Sender<()>,
+    current: Arc<Mutex<IndexMap<Cid, FeedViewPost>>>,
 }
 
 impl<W> Watch for FeedWatcher<W>
@@ -36,17 +42,27 @@ where
 
     fn subscribe(&self) -> tokio::sync::watch::Receiver<Self::Output> {
         let (tx, rx) = watch::channel(Default::default());
-        let (agent, feed_value) = (self.agent.clone(), Arc::new(self.feed_value.clone()));
+        let (agent, current, feed_value) = (
+            self.agent.clone(),
+            self.current.clone(),
+            Arc::new(self.feed_value.clone()),
+        );
         let (mut preferences, mut quit) = (self.preferences.subscribe(), self.tx.subscribe());
+        // TODO interval
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     changed = preferences.changed() => {
                         if changed.is_ok() {
                             let preferences = preferences.borrow_and_update().clone();
-                            let (agent, feed_value, tx) = (agent.clone(), feed_value.clone(), tx.clone());
+                            let (agent, current, feed_value, tx) = (
+                                agent.clone(),
+                                current.clone(),
+                                feed_value.clone(),
+                                tx.clone(),
+                            );
                             tokio::spawn(async move {
-                                update(&agent, &feed_value, &preferences, &tx).await;
+                                update(&agent, &current, &feed_value, &preferences, &tx).await;
                             });
                         } else {
                             break log::warn!("preferences channel closed");
@@ -74,14 +90,14 @@ where
 
 async fn update(
     agent: &BskyAgent,
+    current: &Mutex<IndexMap<Cid, FeedViewPost>>,
     feed_value: &SavedFeedValue,
     preferences: &Preferences,
     tx: &watch::Sender<Vec<FeedViewPost>>,
 ) {
-    // TODO: moderation, resume from current state
-    match get_feed_view_posts(agent, feed_value).await {
-        Ok(feed_view_posts) => {
-            tx.send(feed_view_posts).ok();
+    match calculate_feed(agent, current, feed_value, preferences).await {
+        Ok(feed) => {
+            tx.send(feed).ok();
         }
         Err(e) => {
             log::error!("failed to get feed view posts: {e}");
@@ -89,11 +105,42 @@ async fn update(
     }
 }
 
-async fn get_feed_view_posts(
+async fn calculate_feed(
     agent: &BskyAgent,
+    current: &Mutex<IndexMap<Cid, FeedViewPost>>,
     feed_value: &SavedFeedValue,
+    preferences: &Preferences,
 ) -> Result<Vec<FeedViewPost>> {
-    let mut feed = match feed_value {
+    let (moderator, feed) = tokio::join!(agent.moderator(preferences), get_feed(agent, feed_value));
+    let moderator = moderator?;
+    let mut feed = feed?;
+    feed.reverse();
+    let mut ret = {
+        let mut feed_map = current.lock().await;
+        update_feeds(&feed, &mut feed_map);
+        feed_map.values().rev().cloned().collect::<Vec<_>>()
+    };
+    // filter by moderator
+    ret.retain(|feed_view_post| {
+        let decision = moderator.moderate_post(&feed_view_post.post);
+        let ui = decision.ui(DecisionContext::ContentList);
+        // TODO: use other results?
+        !ui.filter()
+    });
+    // filter by preferences (following timeline only)
+    if matches!(feed_value, SavedFeedValue::Timeline(_)) {
+        let pref = if let Some(pref) = preferences.feed_view_prefs.get("home") {
+            pref.clone()
+        } else {
+            FeedViewPreferenceData::default().into()
+        };
+        ret.retain(|feed_view_post| filter_feed(feed_view_post, &pref));
+    }
+    Ok(ret)
+}
+
+async fn get_feed(agent: &BskyAgent, feed_value: &SavedFeedValue) -> Result<Vec<FeedViewPost>> {
+    Ok(match feed_value {
         SavedFeedValue::Feed(generator_view) => {
             agent
                 .api
@@ -131,12 +178,7 @@ async fn get_feed_view_posts(
                 .data
                 .feed
         }
-    };
-    log::debug!("fetch {} feed view posts", feed.len());
-    feed.reverse();
-    let mut feed_map = IndexMap::new();
-    update_feeds(&feed, &mut feed_map);
-    Ok(feed_map.values().rev().cloned().collect())
+    })
 }
 
 fn update_feeds(feed: &[FeedViewPost], feed_map: &mut IndexMap<Cid, FeedViewPost>) {
@@ -161,6 +203,46 @@ fn update_feeds(feed: &[FeedViewPost], feed_map: &mut IndexMap<Cid, FeedViewPost
         }
         feed_map.insert(post.post.cid.clone(), post.clone());
     }
+}
+
+fn filter_feed(feed_view_post: &FeedViewPost, pref: &FeedViewPreference) -> bool {
+    // is repost?
+    if matches!(
+        &feed_view_post.reason,
+        Some(Union::Refs(FeedViewPostReasonRefs::ReasonRepost(_)))
+    ) {
+        return !pref.hide_reposts;
+    }
+    // is reply?
+    if let Some(reply) = &feed_view_post.reply {
+        let is_self_reply = matches!(&reply.parent,
+            Union::Refs(ReplyRefParentRefs::PostView(post_view))
+                if post_view.author.did == feed_view_post.post.author.did
+        );
+        if pref.hide_replies {
+            return is_self_reply;
+        }
+        if feed_view_post.post.like_count.unwrap_or_default() < pref.hide_replies_by_like_count {
+            return is_self_reply;
+        }
+        if pref.hide_replies_by_unfollowed {
+            return matches!(&reply.parent,
+                Union::Refs(ReplyRefParentRefs::PostView(parent))
+                    if parent.author.viewer.as_ref().map(|viewer| viewer.following.is_some()).unwrap_or_default()
+            );
+        }
+    }
+    // is quote post?
+    else if matches!(
+        &feed_view_post.post.embed,
+        Some(Union::Refs(
+            PostViewEmbedRefs::AppBskyEmbedRecordView(_)
+                | PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(_)
+        ))
+    ) {
+        return !pref.hide_quote_posts;
+    }
+    true
 }
 
 #[cfg(test)]
