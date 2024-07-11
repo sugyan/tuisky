@@ -1,7 +1,7 @@
 use super::types::{Transition, View};
 use super::utils::{profile_name, profile_name_as_str};
 use super::{types::Action, ViewComponent};
-use crate::backend::{PostThreadWatcher, Watcher};
+use crate::backend::{Watch, Watcher};
 use crate::components::views::types::Data;
 use bsky_sdk::api::app::bsky::actor::defs::ProfileViewBasic;
 use bsky_sdk::api::app::bsky::embed::record::{self, ViewRecordRefs};
@@ -73,7 +73,7 @@ pub struct PostViewComponent {
     list_state: ListState,
     action_tx: UnboundedSender<Action>,
     agent: Arc<BskyAgent>,
-    watcher: Arc<PostThreadWatcher>,
+    watcher: Box<dyn Watch<Output = Union<OutputThreadRefs>>>,
     quit: Option<oneshot::Sender<()>>,
 }
 
@@ -86,7 +86,7 @@ impl PostViewComponent {
     ) -> Self {
         let actions = Self::post_view_actions(&post_view);
         let agent = watcher.agent.clone();
-        let watcher = Arc::new(watcher.post_thread(post_view.uri.clone()));
+        let watcher = Box::new(watcher.post_thread(post_view.uri.clone()));
         Self {
             post_view,
             reply,
@@ -436,7 +436,9 @@ impl ViewComponent for PostViewComponent {
     }
     fn deactivate(&mut self) -> Result<()> {
         if let Some(tx) = self.quit.take() {
-            tx.send(()).ok();
+            if tx.send(()).is_err() {
+                log::error!("failed to send quit signal");
+            }
         }
         self.watcher.unsubscribe();
         Ok(())

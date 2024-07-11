@@ -212,9 +212,9 @@ dependencies = [
 
 [[package]]
 name = "bsky-sdk"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0ea1f3c115b7ce523a4feb9032d424489a25dfdbd9f8da818580c9e46e9021b"
+checksum = "b9af10953d2abf113e9f9d2f20bd85ed65d54a8e506606362abb2800ad7d5251"
 dependencies = [
  "anyhow",
  "async-trait",

@@ -1,7 +1,7 @@
 use super::types::{Action, Transition, View};
 use super::utils::profile_name_as_str;
 use super::ViewComponent;
-use crate::backend::types::{SavedFeed, FeedDescriptor};
+use crate::backend::types::{FeedDescriptor, SavedFeed};
 use crate::backend::{Watch, Watcher};
 use crate::components::views::types::Data;
 use color_eyre::Result;

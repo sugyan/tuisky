@@ -124,6 +124,7 @@ async fn calculate_feed(
     descriptor: &FeedDescriptor,
     preferences: &Preferences,
 ) -> Result<Vec<FeedViewPost>> {
+    // TODO: It should not be necessary to get moderator every time unless moderation_prefs has been changed?
     let (moderator, feed) = tokio::join!(agent.moderator(preferences), get_feed(agent, descriptor));
     let moderator = moderator?;
     let mut feed = feed?;
