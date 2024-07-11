@@ -39,8 +39,8 @@ Options:
 
 Global:
 
-- `Ctrl - q`: Quit
-- `Ctrl - o`: Focus next column
+- `Ctrl-q`: Quit
+- `Ctrl-o`: Focus next column
 
 Column:
 
@@ -48,6 +48,7 @@ Column:
 - `Up`: Prev item
 - `Enter`: Select item
 - `Backspace`: Back to previous view
+- `Ctrl-r`: Refresh current view
 
 
 ### Configuration with toml file

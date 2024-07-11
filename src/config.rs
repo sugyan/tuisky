@@ -58,6 +58,11 @@ impl Config {
             .column
             .entry(Key(KeyCode::Backspace, KeyModifiers::NONE))
             .or_insert(ColumnAction::Back);
+        // column: Ctrl-r to Refresh
+        self.keybindings
+            .column
+            .entry(Key(KeyCode::Char('r'), KeyModifiers::CONTROL))
+            .or_insert(ColumnAction::Refresh);
     }
 }
 
