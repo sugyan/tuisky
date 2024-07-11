@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/sugyan/tuisky/compare/v0.0.3...v0.0.4) - 2024-07-11
+
+### Added
+- Add default keybindings ([#13](https://github.com/sugyan/tuisky/pull/13))
+- Show labels and langs ([#12](https://github.com/sugyan/tuisky/pull/12))
+- Update watchers ([#11](https://github.com/sugyan/tuisky/pull/11))
+- Add facets rows and actions to post view ([#8](https://github.com/sugyan/tuisky/pull/8))
+
+### Fixed
+- Fix PostViewComponent::deactivate ([#10](https://github.com/sugyan/tuisky/pull/10))
+
 ## [0.0.3](https://github.com/sugyan/tuisky/compare/v0.0.2...v0.0.3) - 2024-07-08
 
 ### Added
