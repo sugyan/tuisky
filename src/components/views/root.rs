@@ -1,7 +1,7 @@
 use super::types::{Action, Transition, View};
 use super::utils::profile_name_as_str;
 use super::ViewComponent;
-use crate::backend::types::{FeedDescriptor, SavedFeed};
+use crate::backend::types::{FeedSourceInfo, PinnedFeed};
 use crate::backend::{Watch, Watcher};
 use crate::components::views::types::Data;
 use color_eyre::Result;
@@ -14,10 +14,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 
 pub struct RootComponent {
-    items: Vec<SavedFeed>,
+    items: Vec<PinnedFeed>,
     state: ListState,
     action_tx: UnboundedSender<Action>,
-    watcher: Box<dyn Watch<Output = Vec<SavedFeed>>>,
+    watcher: Box<dyn Watch<Output = Vec<PinnedFeed>>>,
     quit: Option<oneshot::Sender<()>>,
 }
 
@@ -27,7 +27,7 @@ impl RootComponent {
             items: Vec::new(),
             state: ListState::default(),
             action_tx,
-            watcher: Box::new(watcher.saved_feeds()),
+            watcher: Box::new(watcher.pinned_feeds()),
             quit: None,
         }
     }
@@ -102,7 +102,7 @@ impl ViewComponent for RootComponent {
                     }
                     if let Some(feed) = self.items.get(index) {
                         return Ok(Some(Action::Transition(Transition::Push(Box::new(
-                            View::Feed(Box::new(feed.value.clone())),
+                            View::Feed(Box::new(feed.info.clone())),
                         )))));
                     }
                 }
@@ -128,20 +128,48 @@ impl ViewComponent for RootComponent {
         let mut items = self
             .items
             .iter()
-            .filter_map(|feed| match &feed.value {
-                FeedDescriptor::Feed(generator_view) => Some(Text::from(vec![Line::from(vec![
-                    Span::from(generator_view.display_name.clone()).bold(),
-                    Span::from(" "),
-                    Span::from(format!(
-                        "by {}",
-                        profile_name_as_str(&generator_view.creator)
+            .map(|feed| match &feed.info {
+                FeedSourceInfo::Feed(generator_view) => Text::from(vec![
+                    Line::from(vec![
+                        Span::from("[feed]").blue(),
+                        Span::from(" "),
+                        Span::from(generator_view.display_name.clone()).bold(),
+                        Span::from(" "),
+                        Span::from(format!(
+                            "by {}",
+                            profile_name_as_str(&generator_view.creator)
+                        ))
+                        .gray(),
+                    ]),
+                    Line::from(format!(
+                        "  {}",
+                        generator_view.description.as_deref().unwrap_or_default()
                     ))
                     .dim(),
-                ])])),
-                FeedDescriptor::List => None,
-                FeedDescriptor::Timeline(value) => {
-                    Some(Text::from(vec![Line::from(value.clone()).bold()]))
-                }
+                ]),
+                FeedSourceInfo::List(list_view) => Text::from(vec![
+                    Line::from(vec![
+                        Span::from("[list]").yellow(),
+                        Span::from(" "),
+                        Span::from(list_view.name.as_str()).bold(),
+                        Span::from(" "),
+                        Span::from(format!("by {}", profile_name_as_str(&list_view.creator)))
+                            .gray(),
+                    ]),
+                    Line::from(format!(
+                        "  {}",
+                        list_view.description.as_deref().unwrap_or_default()
+                    ))
+                    .dim(),
+                ]),
+                FeedSourceInfo::Timeline(_) => Text::from(vec![
+                    Line::from(vec![
+                        Span::from("[timeline]").green(),
+                        Span::from(" "),
+                        Span::from("Following").bold(),
+                    ]),
+                    Line::from("  Your following feed").dim(),
+                ]),
             })
             .collect::<Vec<_>>();
         if !items.is_empty() {
@@ -150,7 +178,7 @@ impl ViewComponent for RootComponent {
         f.render_stateful_widget(
             List::new(items)
                 .block(Block::default().padding(Padding::uniform(1)))
-                .highlight_style(Style::default().reversed()),
+                .highlight_style(Style::default().reset().reversed()),
             area,
             &mut self.state,
         );

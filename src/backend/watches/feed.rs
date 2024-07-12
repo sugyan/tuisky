@@ -1,4 +1,4 @@
-use super::super::types::FeedDescriptor;
+use super::super::types::FeedSourceInfo;
 use super::super::{Watch, Watcher};
 use bsky_sdk::api::app::bsky::feed::defs::{
     FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
@@ -16,10 +16,10 @@ use tokio::sync::{broadcast, watch, Mutex};
 use tokio::time;
 
 impl Watcher {
-    pub fn feed(&self, descriptor: FeedDescriptor) -> impl Watch<Output = Vec<FeedViewPost>> {
+    pub fn feed(&self, feed_info: FeedSourceInfo) -> impl Watch<Output = Vec<FeedViewPost>> {
         let (tx, _) = broadcast::channel(1);
         FeedWatcher {
-            descriptor,
+            feed_info,
             agent: self.agent.clone(),
             preferences: self.preferences(),
             period: Duration::from_secs(self.config.intervals.feed),
@@ -30,7 +30,7 @@ impl Watcher {
 }
 
 pub struct FeedWatcher<W> {
-    descriptor: FeedDescriptor,
+    feed_info: FeedSourceInfo,
     agent: Arc<BskyAgent>,
     preferences: W,
     period: Duration,
@@ -49,7 +49,7 @@ where
         let updater = Updater {
             agent: self.agent.clone(),
             current: self.current.clone(),
-            descriptor: Arc::new(self.descriptor.clone()),
+            feed_info: Arc::new(self.feed_info.clone()),
             tx,
         };
         let (mut preferences, mut quit) = (self.preferences.subscribe(), self.tx.subscribe());
@@ -102,7 +102,7 @@ where
 struct Updater {
     agent: Arc<BskyAgent>,
     current: Arc<Mutex<IndexMap<Cid, FeedViewPost>>>,
-    descriptor: Arc<FeedDescriptor>,
+    feed_info: Arc<FeedSourceInfo>,
     tx: watch::Sender<Vec<FeedViewPost>>,
 }
 
@@ -136,7 +136,7 @@ impl Updater {
             !ui.filter()
         });
         // filter by preferences (following timeline only)
-        if matches!(self.descriptor.as_ref(), FeedDescriptor::Timeline(_)) {
+        if matches!(self.feed_info.as_ref(), FeedSourceInfo::Timeline(_)) {
             let pref = if let Some(pref) = preferences.feed_view_prefs.get("home") {
                 pref.clone()
             } else {
@@ -147,8 +147,8 @@ impl Updater {
         Ok(ret)
     }
     async fn get_feed(&self) -> Result<Vec<FeedViewPost>> {
-        Ok(match self.descriptor.as_ref() {
-            FeedDescriptor::Feed(generator_view) => {
+        Ok(match self.feed_info.as_ref() {
+            FeedSourceInfo::Feed(generator_view) => {
                 self.agent
                     .api
                     .app
@@ -166,8 +166,25 @@ impl Updater {
                     .data
                     .feed
             }
-            FeedDescriptor::List => Vec::new(),
-            FeedDescriptor::Timeline(_) => {
+            FeedSourceInfo::List(list_view) => {
+                self.agent
+                    .api
+                    .app
+                    .bsky
+                    .feed
+                    .get_list_feed(
+                        bsky_sdk::api::app::bsky::feed::get_list_feed::ParametersData {
+                            cursor: None,
+                            limit: 30.try_into().ok(),
+                            list: list_view.uri.clone(),
+                        }
+                        .into(),
+                    )
+                    .await?
+                    .data
+                    .feed
+            }
+            FeedSourceInfo::Timeline(_) => {
                 self.agent
                     .api
                     .app
