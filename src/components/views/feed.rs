@@ -1,7 +1,7 @@
 use super::types::{Action, Data, Transition, View};
 use super::utils::{profile_name, profile_name_as_str};
 use super::ViewComponent;
-use crate::backend::types::FeedDescriptor;
+use crate::backend::types::FeedSourceInfo;
 use crate::backend::{Watch, Watcher};
 use bsky_sdk::api::app::bsky::feed::defs::{
     FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
@@ -24,7 +24,7 @@ pub struct FeedViewComponent {
     items: Vec<FeedViewPost>,
     state: ListState,
     action_tx: UnboundedSender<Action>,
-    descriptor: FeedDescriptor,
+    feed_info: FeedSourceInfo,
     watcher: Box<dyn Watch<Output = Vec<FeedViewPost>>>,
     quit: Option<oneshot::Sender<()>>,
 }
@@ -33,14 +33,14 @@ impl FeedViewComponent {
     pub fn new(
         action_tx: UnboundedSender<Action>,
         watcher: Arc<Watcher>,
-        descriptor: FeedDescriptor,
+        feed_info: FeedSourceInfo,
     ) -> Self {
-        let watcher = Box::new(watcher.feed(descriptor.clone()));
+        let watcher = Box::new(watcher.feed(feed_info.clone()));
         Self {
             items: Vec::new(),
             state: ListState::default(),
             action_tx,
-            descriptor,
+            feed_info,
             watcher,
             quit: None,
         }
@@ -248,18 +248,22 @@ impl ViewComponent for FeedViewComponent {
         Ok(None)
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        let header = Paragraph::new(match &self.descriptor {
-            FeedDescriptor::Feed(generator_view) => Line::from(vec![
+        let header = Paragraph::new(match &self.feed_info {
+            FeedSourceInfo::Feed(generator_view) => Line::from(vec![
                 Span::from(generator_view.display_name.clone()).bold(),
                 Span::from(" "),
                 Span::from(format!(
                     "by {}",
                     profile_name_as_str(&generator_view.creator)
                 ))
-                .dim(),
+                .gray(),
             ]),
-            FeedDescriptor::List => Line::from(""),
-            FeedDescriptor::Timeline(value) => Line::from(value.as_str()),
+            FeedSourceInfo::List(list_view) => Line::from(vec![
+                Span::from(list_view.name.clone()).bold(),
+                Span::from(" "),
+                Span::from(format!("by {}", profile_name_as_str(&list_view.creator))).gray(),
+            ]),
+            FeedSourceInfo::Timeline(_) => Line::from("Following").bold(),
         })
         .bold()
         .block(

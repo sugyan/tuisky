@@ -203,7 +203,12 @@ impl PostViewComponent {
             return None;
         };
         let mut author_lines = vec![Line::from(post_view.author.handle.as_str())];
-        if let Some(display_name) = &post_view.author.display_name {
+        if let Some(display_name) = post_view
+            .author
+            .display_name
+            .as_ref()
+            .filter(|s| !s.is_empty())
+        {
             author_lines.push(Line::from(display_name.as_str()).bold());
         }
         if let Some(labels) = post_view.author.labels.as_ref().filter(|v| !v.is_empty()) {
