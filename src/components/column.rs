@@ -135,6 +135,12 @@ impl ColumnComponent {
                     watcher.clone(),
                     post_view.clone(),
                     reply.clone(),
+                    self.session
+                        .read()
+                        .ok()
+                        .as_ref()
+                        .and_then(|s| s.as_ref())
+                        .cloned(),
                 ))
             }
         })

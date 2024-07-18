@@ -2,6 +2,7 @@ use super::types::{Action, Data, Transition, View};
 use super::utils::{profile_name, profile_name_as_str};
 use super::ViewComponent;
 use crate::backend::{Watch, Watcher};
+use bsky_sdk::api::agent::Session;
 use bsky_sdk::api::app::bsky::actor::defs::ProfileViewBasic;
 use bsky_sdk::api::app::bsky::embed::record::{self, ViewRecordRefs};
 use bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs;
@@ -36,6 +37,7 @@ enum PostAction {
     Repost,
     Like,
     Unlike(String),
+    Delete,
     Open(String),
     ViewRecord(record::ViewRecord),
 }
@@ -53,6 +55,7 @@ impl<'a> From<&'a PostAction> for ListItem<'a> {
             PostAction::Repost => Self::from("Repost").dim(),
             PostAction::Like => Self::from("Like"),
             PostAction::Unlike(_) => Self::from("Unlike"),
+            PostAction::Delete => Self::from("Delete").red(),
             PostAction::Open(uri) => Self::from(format!("Open {uri}")),
             PostAction::ViewRecord(view_record) => Self::from(Line::from(vec![
                 Span::from("Show "),
@@ -74,6 +77,7 @@ pub struct PostViewComponent {
     agent: Arc<BskyAgent>,
     watcher: Box<dyn Watch<Output = Union<OutputThreadRefs>>>,
     quit: Option<oneshot::Sender<()>>,
+    session: Option<Session>,
 }
 
 impl PostViewComponent {
@@ -82,8 +86,9 @@ impl PostViewComponent {
         watcher: Arc<Watcher>,
         post_view: PostView,
         reply: Option<PostView>,
+        session: Option<Session>,
     ) -> Self {
-        let actions = Self::post_view_actions(&post_view);
+        let actions = Self::post_view_actions(&post_view, &session);
         let agent = watcher.agent.clone();
         let watcher = Box::new(watcher.post_thread(post_view.uri.clone()));
         Self {
@@ -96,9 +101,10 @@ impl PostViewComponent {
             agent,
             watcher,
             quit: None,
+            session,
         }
     }
-    fn post_view_actions(post_view: &PostView) -> Vec<PostAction> {
+    fn post_view_actions(post_view: &PostView, session: &Option<Session>) -> Vec<PostAction> {
         let mut liked = None;
         if let Some(viewer) = &post_view.viewer {
             liked = viewer.like.as_ref();
@@ -113,6 +119,9 @@ impl PostViewComponent {
                 PostAction::Like
             },
         ];
+        if Some(&post_view.author.did) == session.as_ref().map(|s| &s.data.did) {
+            actions.push(PostAction::Delete);
+        }
         let mut links = IndexSet::new();
         if let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &post_view.record {
             if let Some(facets) = &record.facets {
@@ -602,6 +611,44 @@ impl ViewComponent for PostViewComponent {
                                 }
                             });
                         }
+                        PostAction::Delete => {
+                            let (agent, tx) = (self.agent.clone(), self.action_tx.clone());
+                            let Some(rkey) = self.post_view.uri.split('/').last().map(String::from)
+                            else {
+                                log::error!("failed to get rkey from uri: {}", self.post_view.uri);
+                                return Ok(None);
+                            };
+                            tokio::spawn(async move {
+                                let Some(session) = agent.get_session().await else {
+                                    return;
+                                };
+                                match agent
+                                    .api
+                                    .com
+                                    .atproto
+                                    .repo
+                                    .delete_record(
+                                        api::com::atproto::repo::delete_record::InputData {
+                                            collection: api::app::bsky::feed::Post::nsid(),
+                                            repo: session.data.did.into(),
+                                            rkey,
+                                            swap_commit: None,
+                                            swap_record: None,
+                                        }
+                                        .into(),
+                                    )
+                                    .await
+                                {
+                                    Ok(_) => {
+                                        log::info!("deleted record");
+                                        tx.send(Action::Transition(Transition::Pop)).ok();
+                                    }
+                                    Err(e) => {
+                                        log::error!("failed to delete record: {e}");
+                                    }
+                                }
+                            });
+                        }
                         PostAction::Open(uri) => {
                             if let Err(e) = open::that(uri) {
                                 log::error!("failed to open: {e}");
@@ -672,8 +719,11 @@ impl ViewComponent for PostViewComponent {
                     }
                     _ => return Ok(None),
                 }
-                self.actions = Self::post_view_actions(&self.post_view);
+                self.actions = Self::post_view_actions(&self.post_view, &self.session);
                 return Ok(Some(Action::Render));
+            }
+            Action::Transition(_) => {
+                return Ok(Some(action));
             }
             _ => {}
         }

@@ -188,7 +188,7 @@ impl ViewComponent for NewPostViewComponent {
                     let Some(session) = agent.get_session().await else {
                         return;
                     };
-                    let result = agent
+                    match agent
                         .api
                         .com
                         .atproto
@@ -217,8 +217,8 @@ impl ViewComponent for NewPostViewComponent {
                             }
                             .into(),
                         )
-                        .await;
-                    match result {
+                        .await
+                    {
                         Ok(output) => {
                             log::info!("Post created: {output:?}");
                             tx.send(Action::Transition(Transition::Pop)).ok();
