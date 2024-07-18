@@ -139,6 +139,9 @@ impl FeedViewComponent {
 }
 
 impl ViewComponent for FeedViewComponent {
+    fn view(&self) -> View {
+        View::Feed(Box::new(self.feed_info.clone()))
+    }
     fn activate(&mut self) -> Result<()> {
         let (tx, mut rx) = (self.action_tx.clone(), self.watcher.subscribe());
         let (quit_tx, mut quit_rx) = oneshot::channel();

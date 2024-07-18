@@ -13,6 +13,7 @@ pub enum Action {
     NextInput,
     PrevInput,
     Enter,
+    Escape,
     Back,
     Refresh,
     Login(Box<BskyAgent>),
@@ -30,6 +31,7 @@ impl Debug for Action {
             Action::NextInput => write!(f, "NextInput"),
             Action::PrevInput => write!(f, "PrevInput"),
             Action::Enter => write!(f, "Enter"),
+            Action::Escape => write!(f, "Escape"),
             Action::Back => write!(f, "Back"),
             Action::Refresh => write!(f, "Refresh"),
             Action::Login(_) => write!(f, "Login"),
@@ -55,9 +57,11 @@ pub enum Transition {
     Replace(Box<View>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum View {
+    Login,
     Root,
+    NewPost,
     Feed(Box<FeedSourceInfo>),
     Post(Box<(PostView, Option<PostView>)>),
 }

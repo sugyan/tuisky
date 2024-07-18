@@ -1,8 +1,7 @@
-use super::types::{Transition, View};
+use super::types::{Action, Data, Transition, View};
 use super::utils::{profile_name, profile_name_as_str};
-use super::{types::Action, ViewComponent};
+use super::ViewComponent;
 use crate::backend::{Watch, Watcher};
-use crate::components::views::types::Data;
 use bsky_sdk::api::app::bsky::actor::defs::ProfileViewBasic;
 use bsky_sdk::api::app::bsky::embed::record::{self, ViewRecordRefs};
 use bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs;
@@ -441,6 +440,9 @@ impl PostViewComponent {
 }
 
 impl ViewComponent for PostViewComponent {
+    fn view(&self) -> View {
+        View::Post(Box::new((self.post_view.clone(), self.reply.clone())))
+    }
     fn activate(&mut self) -> Result<()> {
         let (tx, mut rx) = (self.action_tx.clone(), self.watcher.subscribe());
         let (quit_tx, mut quit_rx) = oneshot::channel();
@@ -679,7 +681,7 @@ impl ViewComponent for PostViewComponent {
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
         let widths = [Constraint::Length(11), Constraint::Percentage(100)];
-        let width = Layout::horizontal(widths).split(area.inner(&Margin::new(1, 0)))[1].width;
+        let width = Layout::horizontal(widths).split(area.inner(Margin::new(1, 0)))[1].width;
 
         let mut rows = Vec::new();
         if let Some(reply) = &self.reply {

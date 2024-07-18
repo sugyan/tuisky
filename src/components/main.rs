@@ -128,6 +128,11 @@ impl Component for MainComponent {
                 );
                 return Ok(Some(Action::Render));
             }
+            Action::NewPost => {
+                if let Some(selected) = self.state.selected {
+                    return self.columns[selected].update(action);
+                }
+            }
             _ => {
                 for column in self.columns.iter_mut() {
                     if let Some(action) = column.update(action.clone())? {

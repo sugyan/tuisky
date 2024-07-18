@@ -1,5 +1,6 @@
 use super::views::feed::FeedViewComponent;
 use super::views::login::LoginComponent;
+use super::views::new_post::NewPostViewComponent;
 use super::views::post::PostViewComponent;
 use super::views::root::RootComponent;
 use super::views::types::{Action as ViewAction, Transition, View};
@@ -81,7 +82,7 @@ impl ColumnComponent {
             format!(" id: {} ", self.id)
         }
     }
-    fn transition(&mut self, transition: &Transition) -> Result<Option<Action>> {
+    pub(crate) fn transition(&mut self, transition: &Transition) -> Result<Option<Action>> {
         match transition {
             Transition::Push(view) => {
                 if let Some(current) = self.views.last_mut() {
@@ -116,7 +117,12 @@ impl ColumnComponent {
             .as_ref()
             .ok_or_else(|| eyre::eyre!("watcher not initialized"))?;
         Ok(match view {
+            View::Login => Box::new(LoginComponent::new(self.view_tx.clone())),
             View::Root => Box::new(RootComponent::new(self.view_tx.clone(), watcher.clone())),
+            View::NewPost => Box::new(NewPostViewComponent::new(
+                self.view_tx.clone(),
+                watcher.agent.clone(),
+            )),
             View::Feed(info) => Box::new(FeedViewComponent::new(
                 self.view_tx.clone(),
                 watcher.clone(),
@@ -154,6 +160,17 @@ impl Component for ColumnComponent {
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
+            Action::NewPost => {
+                if self.watcher.is_some()
+                    && !self
+                        .views
+                        .last()
+                        .map(|view| view.view() == View::NewPost)
+                        .unwrap_or_default()
+                {
+                    return self.transition(&Transition::Push(Box::new(View::NewPost)));
+                }
+            }
             Action::View((id, view_action)) if id == self.id => {
                 if let ViewAction::Render = view_action {
                     return Ok(Some(Action::Render));

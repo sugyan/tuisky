@@ -1,4 +1,4 @@
-use super::types::Action;
+use super::types::{Action, View};
 use super::ViewComponent;
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
@@ -74,11 +74,14 @@ impl LoginComponent {
 }
 
 impl ViewComponent for LoginComponent {
+    fn view(&self) -> View {
+        View::Login
+    }
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
         if let Some(current) = self.current() {
             current.handle_key_event(key);
-            if let Err(err) = self.action_tx.send(Action::Render) {
-                log::error!("failed to send render event: {err}");
+            if let Err(e) = self.action_tx.send(Action::Render) {
+                log::error!("failed to send render event: {e}");
             }
         }
         Ok(None)

@@ -8,7 +8,7 @@ pub struct PinnedFeed {
     pub info: FeedSourceInfo,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FeedSourceInfo {
     Feed(Box<GeneratorView>),
     List(Box<ListView>),
