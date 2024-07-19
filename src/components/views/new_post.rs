@@ -1,8 +1,7 @@
 use super::types::{Action, Transition, View};
 use super::ViewComponent;
-use bsky_sdk::api::records::{KnownRecord, Record};
 use bsky_sdk::api::types::string::Datetime;
-use bsky_sdk::api::types::{string::Language, Collection};
+use bsky_sdk::api::types::string::Language;
 use bsky_sdk::rich_text::RichText;
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
@@ -185,38 +184,18 @@ impl ViewComponent for NewPostViewComponent {
                 )
                 .filter(|v| !v.is_empty());
                 tokio::spawn(async move {
-                    let Some(session) = agent.get_session().await else {
-                        return;
-                    };
                     match agent
-                        .api
-                        .com
-                        .atproto
-                        .repo
-                        .create_record(
-                            bsky_sdk::api::com::atproto::repo::create_record::InputData {
-                                collection: bsky_sdk::api::app::bsky::feed::Post::nsid(),
-                                record: Record::Known(KnownRecord::AppBskyFeedPost(Box::new(
-                                    bsky_sdk::api::app::bsky::feed::post::RecordData {
-                                        created_at: Datetime::now(),
-                                        embed: None,
-                                        entities: None,
-                                        facets: None,
-                                        labels: None,
-                                        langs,
-                                        reply: None,
-                                        tags: None,
-                                        text,
-                                    }
-                                    .into(),
-                                ))),
-                                repo: session.data.did.into(),
-                                rkey: None,
-                                swap_commit: None,
-                                validate: None,
-                            }
-                            .into(),
-                        )
+                        .create_record(bsky_sdk::api::app::bsky::feed::post::RecordData {
+                            created_at: Datetime::now(),
+                            embed: None,
+                            entities: None,
+                            facets: None,
+                            labels: None,
+                            langs,
+                            reply: None,
+                            tags: None,
+                            text,
+                        })
                         .await
                     {
                         Ok(output) => {

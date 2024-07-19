@@ -14,7 +14,7 @@ use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use bsky_sdk::api::app::bsky::richtext::facet::MainFeaturesItem;
 use bsky_sdk::api::records::{KnownRecord, Record};
 use bsky_sdk::api::types::string::Datetime;
-use bsky_sdk::api::types::{Collection, Union};
+use bsky_sdk::api::types::Union;
 use bsky_sdk::{api, BskyAgent};
 use chrono::Local;
 use color_eyre::Result;
@@ -520,39 +520,16 @@ impl ViewComponent for PostViewComponent {
                                 }
                                 .into(),
                             );
-                            let record = Record::Known(KnownRecord::AppBskyFeedLike(Box::new(
-                                api::app::bsky::feed::like::RecordData {
-                                    created_at: Datetime::now(),
-                                    subject: api::com::atproto::repo::strong_ref::MainData {
-                                        cid: self.post_view.cid.clone(),
-                                        uri: self.post_view.uri.clone(),
-                                    }
-                                    .into(),
+                            let record_data = api::app::bsky::feed::like::RecordData {
+                                created_at: Datetime::now(),
+                                subject: api::com::atproto::repo::strong_ref::MainData {
+                                    cid: self.post_view.cid.clone(),
+                                    uri: self.post_view.uri.clone(),
                                 }
                                 .into(),
-                            )));
+                            };
                             tokio::spawn(async move {
-                                let Some(session) = agent.get_session().await else {
-                                    return;
-                                };
-                                match agent
-                                    .api
-                                    .com
-                                    .atproto
-                                    .repo
-                                    .create_record(
-                                        api::com::atproto::repo::create_record::InputData {
-                                            collection: api::app::bsky::feed::Like::nsid(),
-                                            record,
-                                            repo: session.data.did.into(),
-                                            rkey: None,
-                                            swap_commit: None,
-                                            validate: None,
-                                        }
-                                        .into(),
-                                    )
-                                    .await
-                                {
+                                match agent.create_record(record_data).await {
                                     Ok(output) => {
                                         log::info!("created like record: {}", output.cid.as_ref());
                                         viewer.like = Some(output.uri.clone());
@@ -570,31 +547,9 @@ impl ViewComponent for PostViewComponent {
                         PostAction::Unlike(uri) => {
                             let (agent, tx) = (self.agent.clone(), self.action_tx.clone());
                             let mut viewer = self.post_view.viewer.clone();
-                            let Some(rkey) = uri.split('/').last().map(String::from) else {
-                                log::error!("failed to get rkey from uri: {uri}");
-                                return Ok(None);
-                            };
+                            let at_uri = uri.clone();
                             tokio::spawn(async move {
-                                let Some(session) = agent.get_session().await else {
-                                    return;
-                                };
-                                match agent
-                                    .api
-                                    .com
-                                    .atproto
-                                    .repo
-                                    .delete_record(
-                                        api::com::atproto::repo::delete_record::InputData {
-                                            collection: api::app::bsky::feed::Like::nsid(),
-                                            repo: session.data.did.into(),
-                                            rkey,
-                                            swap_commit: None,
-                                            swap_record: None,
-                                        }
-                                        .into(),
-                                    )
-                                    .await
-                                {
+                                match agent.delete_record(at_uri).await {
                                     Ok(_) => {
                                         log::info!("deleted like record");
                                         if let Some(viewer) = viewer.as_mut() {
@@ -612,33 +567,11 @@ impl ViewComponent for PostViewComponent {
                             });
                         }
                         PostAction::Delete => {
+                            // TODO: confirmation dialog
                             let (agent, tx) = (self.agent.clone(), self.action_tx.clone());
-                            let Some(rkey) = self.post_view.uri.split('/').last().map(String::from)
-                            else {
-                                log::error!("failed to get rkey from uri: {}", self.post_view.uri);
-                                return Ok(None);
-                            };
+                            let at_uri = self.post_view.uri.clone();
                             tokio::spawn(async move {
-                                let Some(session) = agent.get_session().await else {
-                                    return;
-                                };
-                                match agent
-                                    .api
-                                    .com
-                                    .atproto
-                                    .repo
-                                    .delete_record(
-                                        api::com::atproto::repo::delete_record::InputData {
-                                            collection: api::app::bsky::feed::Post::nsid(),
-                                            repo: session.data.did.into(),
-                                            rkey,
-                                            swap_commit: None,
-                                            swap_record: None,
-                                        }
-                                        .into(),
-                                    )
-                                    .await
-                                {
+                                match agent.delete_record(at_uri).await {
                                     Ok(_) => {
                                         log::info!("deleted record");
                                         tx.send(Action::Transition(Transition::Pop)).ok();
