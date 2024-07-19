@@ -34,6 +34,9 @@ impl RootComponent {
 }
 
 impl ViewComponent for RootComponent {
+    fn view(&self) -> View {
+        View::Root
+    }
     fn activate(&mut self) -> Result<()> {
         let (tx, mut rx) = (self.action_tx.clone(), self.watcher.subscribe());
         let (quit_tx, mut quit_rx) = oneshot::channel();

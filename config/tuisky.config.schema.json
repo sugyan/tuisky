@@ -29,6 +29,7 @@
                 "NextFocus",
                 "PrevFocus",
                 "Help",
+                "NewPost",
                 "Quit"
               ]
             }
@@ -46,6 +47,7 @@
                 "NextInput",
                 "PrevInput",
                 "Enter",
+                "Escape",
                 "Back",
                 "Refresh"
               ]

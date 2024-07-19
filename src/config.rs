@@ -53,6 +53,11 @@ impl Config {
             .column
             .entry(Key(KeyCode::Enter, KeyModifiers::NONE))
             .or_insert(ColumnAction::Enter);
+        // column: Esc to Escape
+        self.keybindings
+            .column
+            .entry(Key(KeyCode::Esc, KeyModifiers::NONE))
+            .or_insert(ColumnAction::Escape);
         // column: Backspace to Back
         self.keybindings
             .column
@@ -152,6 +157,7 @@ impl<'de> Deserialize<'de> for Key {
 pub enum GlobalAction {
     NextFocus,
     PrevFocus,
+    NewPost,
     Help,
     Quit,
 }
@@ -161,6 +167,7 @@ impl From<&GlobalAction> for AppAction {
         match action {
             GlobalAction::NextFocus => Self::NextFocus,
             GlobalAction::PrevFocus => Self::PrevFocus,
+            GlobalAction::NewPost => Self::NewPost,
             GlobalAction::Help => Self::Help,
             GlobalAction::Quit => Self::Quit,
         }
@@ -174,6 +181,7 @@ pub enum ColumnAction {
     NextInput,
     PrevInput,
     Enter,
+    Escape,
     Back,
     Refresh,
 }
@@ -186,6 +194,7 @@ impl From<&ColumnAction> for ViewAction {
             ColumnAction::NextInput => Self::NextInput,
             ColumnAction::PrevInput => Self::PrevInput,
             ColumnAction::Enter => Self::Enter,
+            ColumnAction::Escape => Self::Escape,
             ColumnAction::Back => Self::Back,
             ColumnAction::Refresh => Self::Refresh,
         }

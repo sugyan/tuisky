@@ -1,16 +1,18 @@
 pub mod feed;
 pub mod login;
+pub mod new_post;
 pub mod post;
 pub mod root;
 pub mod types;
 mod utils;
 
-use self::types::Action;
+use self::types::{Action, View};
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::{layout::Rect, Frame};
 
 pub trait ViewComponent {
+    fn view(&self) -> View;
     fn activate(&mut self) -> Result<()> {
         Ok(())
     }

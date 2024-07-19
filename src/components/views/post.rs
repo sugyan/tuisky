@@ -1,8 +1,8 @@
-use super::types::{Transition, View};
+use super::types::{Action, Data, Transition, View};
 use super::utils::{profile_name, profile_name_as_str};
-use super::{types::Action, ViewComponent};
+use super::ViewComponent;
 use crate::backend::{Watch, Watcher};
-use crate::components::views::types::Data;
+use bsky_sdk::api::agent::Session;
 use bsky_sdk::api::app::bsky::actor::defs::ProfileViewBasic;
 use bsky_sdk::api::app::bsky::embed::record::{self, ViewRecordRefs};
 use bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs;
@@ -14,7 +14,7 @@ use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use bsky_sdk::api::app::bsky::richtext::facet::MainFeaturesItem;
 use bsky_sdk::api::records::{KnownRecord, Record};
 use bsky_sdk::api::types::string::Datetime;
-use bsky_sdk::api::types::{Collection, Union};
+use bsky_sdk::api::types::Union;
 use bsky_sdk::{api, BskyAgent};
 use chrono::Local;
 use color_eyre::Result;
@@ -37,6 +37,7 @@ enum PostAction {
     Repost,
     Like,
     Unlike(String),
+    Delete,
     Open(String),
     ViewRecord(record::ViewRecord),
 }
@@ -54,6 +55,7 @@ impl<'a> From<&'a PostAction> for ListItem<'a> {
             PostAction::Repost => Self::from("Repost").dim(),
             PostAction::Like => Self::from("Like"),
             PostAction::Unlike(_) => Self::from("Unlike"),
+            PostAction::Delete => Self::from("Delete").red(),
             PostAction::Open(uri) => Self::from(format!("Open {uri}")),
             PostAction::ViewRecord(view_record) => Self::from(Line::from(vec![
                 Span::from("Show "),
@@ -75,6 +77,7 @@ pub struct PostViewComponent {
     agent: Arc<BskyAgent>,
     watcher: Box<dyn Watch<Output = Union<OutputThreadRefs>>>,
     quit: Option<oneshot::Sender<()>>,
+    session: Option<Session>,
 }
 
 impl PostViewComponent {
@@ -83,8 +86,9 @@ impl PostViewComponent {
         watcher: Arc<Watcher>,
         post_view: PostView,
         reply: Option<PostView>,
+        session: Option<Session>,
     ) -> Self {
-        let actions = Self::post_view_actions(&post_view);
+        let actions = Self::post_view_actions(&post_view, &session);
         let agent = watcher.agent.clone();
         let watcher = Box::new(watcher.post_thread(post_view.uri.clone()));
         Self {
@@ -97,9 +101,10 @@ impl PostViewComponent {
             agent,
             watcher,
             quit: None,
+            session,
         }
     }
-    fn post_view_actions(post_view: &PostView) -> Vec<PostAction> {
+    fn post_view_actions(post_view: &PostView, session: &Option<Session>) -> Vec<PostAction> {
         let mut liked = None;
         if let Some(viewer) = &post_view.viewer {
             liked = viewer.like.as_ref();
@@ -114,6 +119,9 @@ impl PostViewComponent {
                 PostAction::Like
             },
         ];
+        if Some(&post_view.author.did) == session.as_ref().map(|s| &s.data.did) {
+            actions.push(PostAction::Delete);
+        }
         let mut links = IndexSet::new();
         if let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &post_view.record {
             if let Some(facets) = &record.facets {
@@ -441,6 +449,9 @@ impl PostViewComponent {
 }
 
 impl ViewComponent for PostViewComponent {
+    fn view(&self) -> View {
+        View::Post(Box::new((self.post_view.clone(), self.reply.clone())))
+    }
     fn activate(&mut self) -> Result<()> {
         let (tx, mut rx) = (self.action_tx.clone(), self.watcher.subscribe());
         let (quit_tx, mut quit_rx) = oneshot::channel();
@@ -509,39 +520,16 @@ impl ViewComponent for PostViewComponent {
                                 }
                                 .into(),
                             );
-                            let record = Record::Known(KnownRecord::AppBskyFeedLike(Box::new(
-                                api::app::bsky::feed::like::RecordData {
-                                    created_at: Datetime::now(),
-                                    subject: api::com::atproto::repo::strong_ref::MainData {
-                                        cid: self.post_view.cid.clone(),
-                                        uri: self.post_view.uri.clone(),
-                                    }
-                                    .into(),
+                            let record_data = api::app::bsky::feed::like::RecordData {
+                                created_at: Datetime::now(),
+                                subject: api::com::atproto::repo::strong_ref::MainData {
+                                    cid: self.post_view.cid.clone(),
+                                    uri: self.post_view.uri.clone(),
                                 }
                                 .into(),
-                            )));
+                            };
                             tokio::spawn(async move {
-                                let Some(session) = agent.get_session().await else {
-                                    return;
-                                };
-                                match agent
-                                    .api
-                                    .com
-                                    .atproto
-                                    .repo
-                                    .create_record(
-                                        api::com::atproto::repo::create_record::InputData {
-                                            collection: api::app::bsky::feed::Like::nsid(),
-                                            record,
-                                            repo: session.data.did.into(),
-                                            rkey: None,
-                                            swap_commit: None,
-                                            validate: None,
-                                        }
-                                        .into(),
-                                    )
-                                    .await
-                                {
+                                match agent.create_record(record_data).await {
                                     Ok(output) => {
                                         log::info!("created like record: {}", output.cid.as_ref());
                                         viewer.like = Some(output.uri.clone());
@@ -559,31 +547,9 @@ impl ViewComponent for PostViewComponent {
                         PostAction::Unlike(uri) => {
                             let (agent, tx) = (self.agent.clone(), self.action_tx.clone());
                             let mut viewer = self.post_view.viewer.clone();
-                            let Some(rkey) = uri.split('/').last().map(String::from) else {
-                                log::error!("failed to get rkey from uri: {uri}");
-                                return Ok(None);
-                            };
+                            let at_uri = uri.clone();
                             tokio::spawn(async move {
-                                let Some(session) = agent.get_session().await else {
-                                    return;
-                                };
-                                match agent
-                                    .api
-                                    .com
-                                    .atproto
-                                    .repo
-                                    .delete_record(
-                                        api::com::atproto::repo::delete_record::InputData {
-                                            collection: api::app::bsky::feed::Like::nsid(),
-                                            repo: session.data.did.into(),
-                                            rkey,
-                                            swap_commit: None,
-                                            swap_record: None,
-                                        }
-                                        .into(),
-                                    )
-                                    .await
-                                {
+                                match agent.delete_record(at_uri).await {
                                     Ok(_) => {
                                         log::info!("deleted like record");
                                         if let Some(viewer) = viewer.as_mut() {
@@ -596,6 +562,22 @@ impl ViewComponent for PostViewComponent {
                                     }
                                     Err(e) => {
                                         log::error!("failed to create like record: {e}");
+                                    }
+                                }
+                            });
+                        }
+                        PostAction::Delete => {
+                            // TODO: confirmation dialog
+                            let (agent, tx) = (self.agent.clone(), self.action_tx.clone());
+                            let at_uri = self.post_view.uri.clone();
+                            tokio::spawn(async move {
+                                match agent.delete_record(at_uri).await {
+                                    Ok(_) => {
+                                        log::info!("deleted record");
+                                        tx.send(Action::Transition(Transition::Pop)).ok();
+                                    }
+                                    Err(e) => {
+                                        log::error!("failed to delete record: {e}");
                                     }
                                 }
                             });
@@ -670,8 +652,11 @@ impl ViewComponent for PostViewComponent {
                     }
                     _ => return Ok(None),
                 }
-                self.actions = Self::post_view_actions(&self.post_view);
+                self.actions = Self::post_view_actions(&self.post_view, &self.session);
                 return Ok(Some(Action::Render));
+            }
+            Action::Transition(_) => {
+                return Ok(Some(action));
             }
             _ => {}
         }
@@ -679,7 +664,7 @@ impl ViewComponent for PostViewComponent {
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
         let widths = [Constraint::Length(11), Constraint::Percentage(100)];
-        let width = Layout::horizontal(widths).split(area.inner(&Margin::new(1, 0)))[1].width;
+        let width = Layout::horizontal(widths).split(area.inner(Margin::new(1, 0)))[1].width;
 
         let mut rows = Vec::new();
         if let Some(reply) = &self.reply {
