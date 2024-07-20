@@ -1,4 +1,4 @@
-# tuisky: TUI application for Bluesky
+# tuisky: TUI client for Bluesky
 
 [![](https://img.shields.io/crates/v/tuisky)](https://crates.io/crates/tuisky)
 [![](https://img.shields.io/crates/l/atrium-api)](https://github.com/sugyan/tuisky/blob/main/LICENSE)
@@ -11,7 +11,7 @@
 - [x] Select from saved feeds
 - [x] Auto refresh rows
 - [x] Auto save & restore app data
-- [ ] Post texts
+- [x] Post texts
 - [ ] Notifications, Chat, ...
 - [x] Configure with files
 - [ ] ... and more
