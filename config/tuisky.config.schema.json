@@ -44,8 +44,6 @@
               "enum": [
                 "NextItem",
                 "PrevItem",
-                "NextInput",
-                "PrevInput",
                 "Enter",
                 "Escape",
                 "Back",
