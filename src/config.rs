@@ -38,16 +38,6 @@ impl Config {
             .column
             .entry(Key(KeyCode::Up, KeyModifiers::NONE))
             .or_insert(ColumnAction::PrevItem);
-        // column: Tab to NextInput
-        self.keybindings
-            .column
-            .entry(Key(KeyCode::Tab, KeyModifiers::NONE))
-            .or_insert(ColumnAction::NextInput);
-        // column: BackTab to PrevInput
-        self.keybindings
-            .column
-            .entry(Key(KeyCode::BackTab, KeyModifiers::SHIFT))
-            .or_insert(ColumnAction::NextInput);
         // column: Enter to Enter
         self.keybindings
             .column
@@ -178,8 +168,6 @@ impl From<&GlobalAction> for AppAction {
 pub enum ColumnAction {
     NextItem,
     PrevItem,
-    NextInput,
-    PrevInput,
     Enter,
     Escape,
     Back,
@@ -191,8 +179,6 @@ impl From<&ColumnAction> for ViewAction {
         match action {
             ColumnAction::NextItem => Self::NextItem,
             ColumnAction::PrevItem => Self::PrevItem,
-            ColumnAction::NextInput => Self::NextInput,
-            ColumnAction::PrevInput => Self::PrevInput,
             ColumnAction::Enter => Self::Enter,
             ColumnAction::Escape => Self::Escape,
             ColumnAction::Back => Self::Back,
