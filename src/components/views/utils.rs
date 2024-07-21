@@ -1,5 +1,7 @@
 use bsky_sdk::api::app::bsky::actor::defs::{ProfileView, ProfileViewBasic};
-use ratatui::{style::Stylize, text::Span};
+use bsky_sdk::api::app::bsky::feed::defs::PostView;
+use ratatui::style::{Style, Stylize};
+use ratatui::text::Span;
 
 pub trait Profile {
     fn display_name(&self) -> Option<&str>;
@@ -38,4 +40,41 @@ pub fn profile_name(author: &dyn Profile) -> Vec<Span> {
     } else {
         vec![format!("@{}", author.handle()).bold()]
     }
+}
+
+pub fn counts(post_view: &PostView, pad: usize) -> Vec<Span> {
+    let (mut reposted, mut liked) = (false, false);
+    if let Some(viewer) = &post_view.viewer {
+        reposted = viewer.repost.is_some();
+        liked = viewer.like.is_some();
+    }
+    let (replies, reposts, likes) = (
+        post_view.reply_count.unwrap_or_default(),
+        post_view.repost_count.unwrap_or_default(),
+        post_view.like_count.unwrap_or_default(),
+    );
+    let style = |b| {
+        if b {
+            Style::default()
+        } else {
+            Style::default().dim()
+        }
+    };
+    vec![
+        Span::from(format!("{replies:pad$} replies")).style(style(replies > 0)),
+        Span::from(", ").dim(),
+        Span::from(format!("{reposts:pad$}")).style(if reposted {
+            Style::default().green()
+        } else {
+            style(reposts > 0)
+        }),
+        Span::from(" reposts").style(style(reposts > 0)),
+        Span::from(", ").dim(),
+        Span::from(format!("{likes:pad$}")).style(if liked {
+            Style::default().red()
+        } else {
+            style(likes > 0)
+        }),
+        Span::from(" likes").style(style(likes > 0)),
+    ]
 }

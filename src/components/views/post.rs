@@ -1,5 +1,5 @@
 use super::types::{Action, Data, Transition, View};
-use super::utils::{profile_name, profile_name_as_str};
+use super::utils::{counts, profile_name, profile_name_as_str};
 use super::ViewComponent;
 use crate::backend::{Watch, Watcher};
 use bsky_sdk::api::agent::Session;
@@ -228,12 +228,6 @@ impl PostViewComponent {
                 author_lines.push(Line::from(spans));
             }
         }
-        let mut liked = false;
-        if let Some(viewer) = &post_view.viewer {
-            if viewer.like.is_some() {
-                liked = true;
-            }
-        }
         let text_lines = textwrap::wrap(&record.text, usize::from(width));
         let mut rows = vec![
             Row::new(vec![
@@ -258,20 +252,7 @@ impl PostViewComponent {
             ]),
             Row::new(vec![
                 Cell::from("Counts:".gray().into_right_aligned_line()),
-                Cell::from(Line::from(vec![
-                    Span::from(post_view.reply_count.unwrap_or_default().to_string()),
-                    Span::from(" replies, ").dim(),
-                    Span::from(post_view.repost_count.unwrap_or_default().to_string()),
-                    Span::from(" reposts, ").dim(),
-                    Span::from(post_view.like_count.unwrap_or_default().to_string()).style(
-                        if liked {
-                            Style::default().fg(Color::Red)
-                        } else {
-                            Style::default()
-                        },
-                    ),
-                    Span::from(" likes").dim(),
-                ])),
+                Cell::from(Line::from(counts(post_view, 0))),
             ]),
             Row::default().height(text_lines.len() as u16).cells(vec![
                 Cell::from("Text:".gray().into_right_aligned_line()),
