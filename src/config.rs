@@ -43,11 +43,6 @@ impl Config {
             .column
             .entry(Key(KeyCode::Enter, KeyModifiers::NONE))
             .or_insert(ColumnAction::Enter);
-        // column: Esc to Escape
-        self.keybindings
-            .column
-            .entry(Key(KeyCode::Esc, KeyModifiers::NONE))
-            .or_insert(ColumnAction::Escape);
         // column: Backspace to Back
         self.keybindings
             .column
@@ -169,7 +164,6 @@ pub enum ColumnAction {
     NextItem,
     PrevItem,
     Enter,
-    Escape,
     Back,
     Refresh,
 }
@@ -180,7 +174,6 @@ impl From<&ColumnAction> for ViewAction {
             ColumnAction::NextItem => Self::NextItem,
             ColumnAction::PrevItem => Self::PrevItem,
             ColumnAction::Enter => Self::Enter,
-            ColumnAction::Escape => Self::Escape,
             ColumnAction::Back => Self::Back,
             ColumnAction::Refresh => Self::Refresh,
         }
@@ -205,7 +198,6 @@ dev = true
 
 [keybindings.global]
 Ctrl-c = "Quit"
-"?" = "Help"
 
 [keybindings.column]
 Ctrl-n = "NextItem"
@@ -222,16 +214,10 @@ feed = 20
                 dev: true,
                 num_columns: None,
                 keybindings: Keybindings {
-                    global: HashMap::from_iter([
-                        (
-                            Key(KeyCode::Char('c'), KeyModifiers::CONTROL),
-                            GlobalAction::Quit
-                        ),
-                        (
-                            Key(KeyCode::Char('?'), KeyModifiers::NONE),
-                            GlobalAction::Help
-                        )
-                    ]),
+                    global: HashMap::from_iter([(
+                        Key(KeyCode::Char('c'), KeyModifiers::CONTROL),
+                        GlobalAction::Quit
+                    )]),
                     column: HashMap::from_iter([
                         (
                             Key(KeyCode::Char('n'), KeyModifiers::CONTROL),
@@ -261,17 +247,10 @@ feed = 20
             num_columns: None,
             dev: true,
             keybindings: Keybindings {
-                global: HashMap::from_iter([
-                    (Key(KeyCode::Esc, KeyModifiers::NONE), GlobalAction::Quit),
-                    (
-                        Key(KeyCode::Char('c'), KeyModifiers::CONTROL),
-                        GlobalAction::Quit,
-                    ),
-                    (
-                        Key(KeyCode::Char('?'), KeyModifiers::NONE),
-                        GlobalAction::Help,
-                    ),
-                ]),
+                global: HashMap::from_iter([(
+                    Key(KeyCode::Char('c'), KeyModifiers::CONTROL),
+                    GlobalAction::Quit,
+                )]),
                 column: HashMap::new(),
             },
             watcher: WatcherConfig {

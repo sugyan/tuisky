@@ -17,7 +17,7 @@ use tui_textarea::TextArea;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Focus {
-    Text(bool),
+    Text,
     Langs,
     Submit,
 }
@@ -25,15 +25,15 @@ enum Focus {
 impl Focus {
     fn next(&self) -> Self {
         match self {
-            Self::Text(_) => Self::Langs,
+            Self::Text => Self::Langs,
             Self::Langs => Self::Submit,
-            Self::Submit => Self::Text(false),
+            Self::Submit => Self::Text,
         }
     }
     fn prev(&self) -> Self {
         match self {
-            Self::Text(_) => Self::Submit,
-            Self::Langs => Self::Text(false),
+            Self::Text => Self::Submit,
+            Self::Langs => Self::Text,
             Self::Submit => Self::Langs,
         }
     }
@@ -62,29 +62,22 @@ impl NewPostViewComponent {
             agent,
             textarea,
             langs,
-            focus: Focus::Text(true),
+            focus: Focus::Text,
             text_len: 0,
         }
     }
     fn current_textarea(&mut self) -> Option<&mut TextArea<'static>> {
         match self.focus {
-            Focus::Text(b) => Some(&mut self.textarea).filter(|_| b),
+            Focus::Text => Some(&mut self.textarea),
             Focus::Langs => Some(&mut self.langs),
             Focus::Submit => None,
         }
     }
     fn update_focus(&mut self, focus: Focus) {
-        let was_text = self.focus == Focus::Text(true);
         if let Some(curr) = self.current_textarea() {
             curr.set_cursor_style(Style::default());
             if let Some(block) = curr.block() {
-                if !was_text {
-                    curr.set_block(block.clone().dim());
-                }
-            }
-        } else if self.focus == Focus::Text(false) && focus != Focus::Text(true) {
-            if let Some(block) = self.textarea.block() {
-                self.textarea.set_block(block.clone().dim());
+                curr.set_block(block.clone().dim());
             }
         }
         self.focus = focus;
@@ -92,10 +85,6 @@ impl NewPostViewComponent {
             curr.set_cursor_style(Style::default().reversed());
             if let Some(block) = curr.block() {
                 curr.set_block(block.clone().reset());
-            }
-        } else if self.focus == Focus::Text(false) {
-            if let Some(block) = self.textarea.block() {
-                self.textarea.set_block(block.clone().reset());
             }
         }
     }
@@ -108,8 +97,9 @@ impl ViewComponent for NewPostViewComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
         let focus = self.focus;
         if let Some(textarea) = self.current_textarea() {
-            if focus == Focus::Text(true) {
-                textarea.input(key);
+            if focus == Focus::Text {
+                let cursor = textarea.cursor();
+                let result = textarea.input(key) || textarea.cursor() != cursor;
                 self.text_len =
                     RichText::new(self.textarea.lines().join("\n"), None).grapheme_len();
                 if let Some(block) = self.textarea.block() {
@@ -121,11 +111,7 @@ impl ViewComponent for NewPostViewComponent {
                     };
                     self.textarea.set_block(block);
                 }
-                return Ok(if key.code == KeyCode::Esc {
-                    None
-                } else {
-                    Some(Action::Render)
-                });
+                return Ok(if result { Some(Action::Render) } else { None });
             } else if matches!(
                 (key.code, key.modifiers),
                 (KeyCode::Enter, _) | (KeyCode::Char('m'), KeyModifiers::CONTROL)
@@ -163,10 +149,6 @@ impl ViewComponent for NewPostViewComponent {
             }
             Action::PrevItem => {
                 self.update_focus(self.focus.prev());
-                Ok(Some(Action::Render))
-            }
-            Action::Enter if self.focus == Focus::Text(false) => {
-                self.update_focus(Focus::Text(true));
                 Ok(Some(Action::Render))
             }
             Action::Enter if self.focus == Focus::Submit => {
@@ -207,10 +189,6 @@ impl ViewComponent for NewPostViewComponent {
                         }
                     }
                 });
-                Ok(Some(Action::Render))
-            }
-            Action::Escape if self.focus == Focus::Text(true) => {
-                self.update_focus(Focus::Text(false));
                 Ok(Some(Action::Render))
             }
             Action::Back => {
