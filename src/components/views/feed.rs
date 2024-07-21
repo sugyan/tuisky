@@ -1,5 +1,5 @@
 use super::types::{Action, Data, Transition, View};
-use super::utils::{profile_name, profile_name_as_str};
+use super::utils::{counts, profile_name, profile_name_as_str};
 use super::ViewComponent;
 use crate::backend::types::FeedSourceInfo;
 use crate::backend::{Watch, Watcher};
@@ -125,15 +125,9 @@ impl FeedViewComponent {
             };
             lines.push(Line::from(format!("  Embedded {content}")).yellow());
         }
-        lines.push(
-            Line::from(format!(
-                "   💬{:<4} 🔁{:<4} 🩷{:<4}",
-                feed_view_post.post.reply_count.unwrap_or_default(),
-                feed_view_post.post.repost_count.unwrap_or_default(),
-                feed_view_post.post.like_count.unwrap_or_default()
-            ))
-            .dim(),
-        );
+        lines.push(Line::from(
+            [vec![Span::from("  ")], counts(&feed_view_post.post, 5)].concat(),
+        ));
         Some(lines)
     }
 }
