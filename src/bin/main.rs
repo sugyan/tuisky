@@ -1,7 +1,7 @@
 use clap::Parser;
 use color_eyre::Result;
-use std::fs;
 use std::path::PathBuf;
+use std::{env, fs};
 use tuisky::app::App;
 use tuisky::config::Config;
 use tuisky::utils::{get_config_dir, initialize_panic_handler};
@@ -17,9 +17,6 @@ struct Args {
     /// The number of columns will be determined by the terminal width.
     #[arg(short, long)]
     num_columns: Option<usize>,
-    /// Development mode
-    #[arg(short, long)]
-    dev: bool,
 }
 
 impl Args {
@@ -37,6 +34,14 @@ impl Args {
     }
 }
 
+fn init_logger() {
+    let mut builder = env_logger::Builder::from_default_env();
+    if env::var("RUST_LOG").is_err() {
+        builder.filter_level(log::LevelFilter::Off);
+    }
+    builder.init();
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -49,12 +54,8 @@ async fn main() -> Result<()> {
     if let Some(num_columns) = args.num_columns {
         config.num_columns = Some(num_columns);
     }
-    config.dev |= args.dev;
 
-    if let Err(e) = tui_logger::init_logger(log::LevelFilter::Debug) {
-        panic!("failed to initialize logger: {e}");
-    }
-    tui_logger::set_default_level(log::LevelFilter::Debug);
+    init_logger();
 
     initialize_panic_handler()?;
 

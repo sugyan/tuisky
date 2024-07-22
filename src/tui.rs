@@ -41,22 +41,16 @@ where
             event_rx,
         }
     }
-    pub fn start(&mut self, frame_rate: Option<f64>) -> Result<()> {
+    pub fn start(&mut self) -> Result<()> {
         init()?;
         let event_tx = self.event_tx.clone();
         self.task = Some(tokio::spawn(async move {
             let mut reader = EventStream::new();
             let mut tick_interval = time::interval(Duration::from_secs(1));
-            let mut render_interval = time::interval(if let Some(frame_rate) = frame_rate {
-                Duration::from_secs_f64(1.0 / frame_rate)
-            } else {
-                Duration::from_secs(1_000_000_000) // TODO
-            });
             let mut tick = 0;
             loop {
                 let event = reader.next().fuse();
                 let tick_tick = tick_interval.tick();
-                let tick_render = render_interval.tick();
                 tokio::select! {
                     e = event => Self::handle_crossterm_event(e, &event_tx),
                     _ = tick_tick => {
@@ -65,11 +59,6 @@ where
                             log::error!("failed to send tick event: {e}");
                         }
                     },
-                    _ = tick_render => {
-                        if let Err(e) = event_tx.send(Event::Render) {
-                            log::error!("failed to send render event: {e}");
-                        }
-                    }
                 }
             }
         }));

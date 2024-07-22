@@ -6,12 +6,8 @@ use crate::types::{Action, Event};
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Color, Style};
-use ratatui::widgets::Block;
 use ratatui::Terminal;
 use tokio::sync::mpsc;
-use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget};
 
 pub struct App {
     config: Config,
@@ -33,14 +29,7 @@ impl App {
         let terminal = Terminal::new(CrosstermBackend::new(io()))?;
         log::debug!("terminal size: {}", terminal.size()?);
         let mut tui = Tui::new(terminal);
-        tui.start(if self.config.dev { Some(10.0) } else { None })?;
-
-        // Prepare layout constraints
-        let mut constraints = vec![Constraint::Percentage(100)];
-        if self.config.dev {
-            constraints.push(Constraint::Min(75));
-        }
-        let layout = Layout::horizontal(&constraints).split(tui.size()?);
+        tui.start()?;
 
         // Create main component
         let mut main_component = MainComponent::new(self.config.clone(), action_tx.clone());
@@ -54,10 +43,13 @@ impl App {
         for component in self.components.iter_mut() {
             component.register_config_handler(self.config.clone())?;
         }
-        main_component.init(layout[0])?;
+        main_component.init(tui.size()?)?;
         for component in self.components.iter_mut() {
             component.init(tui.size()?)?;
         }
+
+        // Initial render
+        action_tx.send(Action::Render)?;
 
         // Main loop
         let mut should_quit = false;
@@ -89,37 +81,17 @@ impl App {
                     }
                     Action::Render => {
                         tui.draw(|f| {
-                            // split horizontally, the right side is for log view
-                            let layout = Layout::horizontal(&constraints).split(f.size());
                             // render main components to the left side
-                            if let Err(e) = main_component.draw(f, layout[0]) {
-                                if let Err(e) =
-                                    action_tx.send(Action::Error(format!("failed to draw: {e}")))
-                                {
-                                    log::error!("failed to send error: {e}");
-                                }
+                            if let Err(e) = main_component.draw(f, f.size()) {
+                                action_tx
+                                    .send(Action::Error(format!("failed to draw: {e}")))
+                                    .ok();
                             }
-                            // render log components to the right side
-                            if self.config.dev {
-                                f.render_widget(
-                                    TuiLoggerWidget::default()
-                                        .block(Block::bordered().title("log"))
-                                        .output_level(Some(TuiLoggerLevelOutput::Abbreviated))
-                                        .style_error(Style::default().fg(Color::Red))
-                                        .style_warn(Style::default().fg(Color::Yellow))
-                                        .style_info(Style::default().fg(Color::Green))
-                                        .style_debug(Style::default().fg(Color::Gray)),
-                                    layout[1],
-                                );
-                            }
-                            // other components?
                             for component in self.components.iter_mut() {
-                                if let Err(e) = component.draw(f, layout[0]) {
-                                    if let Err(e) = action_tx
+                                if let Err(e) = component.draw(f, f.size()) {
+                                    action_tx
                                         .send(Action::Error(format!("failed to draw: {e}")))
-                                    {
-                                        log::error!("failed to send error: {e}");
-                                    }
+                                        .ok();
                                 }
                             }
                         })?;
@@ -146,7 +118,6 @@ impl App {
     fn handle_events(&mut self, event: Event) -> Option<Action> {
         match event {
             Event::Tick(i) => return Some(Action::Tick(i)),
-            Event::Render => return Some(Action::Render),
             Event::Key(key_event) => {
                 if let Some(action) = self.handle_key_events(key_event) {
                     return Some(action);

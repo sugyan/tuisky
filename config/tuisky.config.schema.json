@@ -1,9 +1,6 @@
 {
   "type": "object",
   "properties": {
-    "dev": {
-      "type": "boolean"
-    },
     "num_columns": {
       "type": "integer",
       "minimum": 1

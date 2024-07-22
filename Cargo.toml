@@ -4,7 +4,7 @@ version = "0.0.4"
 authors = ["sugyan <sugi1982+github@gmail.com>"]
 edition = "2021"
 rust-version = "1.74"
-description = "TUI application for Bluesky"
+description = "TUI client for Bluesky"
 readme = "README.md"
 repository = "https://github.com/sugyan/tuisky"
 license = "MIT"
@@ -18,6 +18,7 @@ clap = { version = "4.5.8", features = ["derive"] }
 color-eyre = "0.6.3"
 crossterm = { version = "0.27.0", features = ["event-stream", "serde"] }
 directories = "5.0.1"
+env_logger = "0.11.3"
 futures-util = "0.3.30"
 indexmap = "2.2.6"
 log = "0.4.22"
@@ -33,7 +34,6 @@ tokio = { version = "1.38.0", features = [
     "time",
 ] }
 toml = "0.8.14"
-tui-logger = "0.11.2"
 tui-textarea = "0.5.1"
 
 [dev-dependencies]
