@@ -85,7 +85,7 @@ impl Component for MainComponent {
             AppData::default()
         };
 
-        let auto_num = usize::from(rect.width) / 80;
+        let auto_num = usize::from(rect.width) / 75;
         let num_columns = self
             .config
             .num_columns

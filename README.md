@@ -30,7 +30,6 @@ Usage: tuisky [OPTIONS]
 Options:
   -c, --config <CONFIG>            Path to the configuration file
   -n, --num-columns <NUM_COLUMNS>  Maximum number of columns to display. The number of columns will be determined by the terminal width
-  -d, --dev                        Development mode
   -h, --help                       Print help
   -V, --version                    Print version
 ```

@@ -17,9 +17,6 @@ struct Args {
     /// The number of columns will be determined by the terminal width.
     #[arg(short, long)]
     num_columns: Option<usize>,
-    /// Development mode
-    #[arg(short, long)]
-    dev: bool,
 }
 
 impl Args {
@@ -57,7 +54,6 @@ async fn main() -> Result<()> {
     if let Some(num_columns) = args.num_columns {
         config.num_columns = Some(num_columns);
     }
-    config.dev |= args.dev;
 
     init_logger();
 

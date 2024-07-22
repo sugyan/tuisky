@@ -9,8 +9,6 @@ use std::collections::HashMap;
 pub struct Config {
     pub num_columns: Option<usize>,
     #[serde(default)]
-    pub dev: bool,
-    #[serde(default)]
     pub keybindings: Keybindings,
     #[serde(default)]
     pub watcher: WatcherConfig,
@@ -194,8 +192,6 @@ mod tests {
     #[test]
     fn deserialize() {
         let input = r#"
-dev = true
-
 [keybindings.global]
 Ctrl-c = "Quit"
 
@@ -211,7 +207,6 @@ feed = 20
         assert_eq!(
             config,
             Config {
-                dev: true,
                 num_columns: None,
                 keybindings: Keybindings {
                     global: HashMap::from_iter([(
@@ -245,7 +240,6 @@ feed = 20
     fn serialize() {
         let config = Config {
             num_columns: None,
-            dev: true,
             keybindings: Keybindings {
                 global: HashMap::from_iter([(
                     Key(KeyCode::Char('c'), KeyModifiers::CONTROL),
