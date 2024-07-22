@@ -118,7 +118,6 @@ impl App {
     fn handle_events(&mut self, event: Event) -> Option<Action> {
         match event {
             Event::Tick(i) => return Some(Action::Tick(i)),
-            Event::Render => return Some(Action::Render),
             Event::Key(key_event) => {
                 if let Some(action) = self.handle_key_events(key_event) {
                     return Some(action);
