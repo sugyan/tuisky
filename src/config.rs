@@ -73,6 +73,22 @@ impl From<KeyEvent> for Key {
     }
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
+impl PartialOrd for Key {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.1.partial_cmp(&other.1) {
+            Some(std::cmp::Ordering::Equal) => self.0.partial_cmp(&other.0),
+            o => o,
+        }
+    }
+}
+
+impl Ord for Key {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
+    }
+}
+
 impl Serialize for Key {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

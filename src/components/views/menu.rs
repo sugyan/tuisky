@@ -1,23 +1,37 @@
 use super::types::Action;
+use crate::config::{ColumnAction, Key, Keybindings};
 use color_eyre::Result;
 use ratatui::layout::Rect;
 use ratatui::style::{Style, Stylize};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, List, ListItem, ListState};
 use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
 
 enum MenuAction {
-    NewPost,
-    Refresh,
-    Back,
+    NewPost(Vec<String>),
+    Refresh(Vec<String>),
+    Back(Vec<String>),
 }
 
 impl<'a> From<&'a MenuAction> for ListItem<'a> {
     fn from(action: &'a MenuAction) -> Self {
         match action {
-            MenuAction::NewPost => Self::from("New Post"),
-            MenuAction::Refresh => Self::from("Refresh"),
-            MenuAction::Back => Self::from("Back"),
+            MenuAction::NewPost(v) if !v.is_empty() => Self::from(Line::from(vec![
+                Span::from("New Post ").reset(),
+                Span::from(format!("({})", v.join(", "))).dim(),
+            ])),
+            MenuAction::NewPost(_) => Self::from("New Post".reset()),
+            MenuAction::Refresh(v) if !v.is_empty() => Self::from(Line::from(vec![
+                Span::from("Refresh ").reset(),
+                Span::from(format!("({})", v.join(", "))).dim(),
+            ])),
+            MenuAction::Refresh(_) => Self::from("Refresh".reset()),
+            MenuAction::Back(v) if !v.is_empty() => Self::from(Line::from(vec![
+                Span::from("Back ").reset(),
+                Span::from(format!("({})", v.join(", "))).dim(),
+            ])),
+            MenuAction::Back(_) => Self::from("Back".reset()),
         }
     }
 }
@@ -29,10 +43,30 @@ pub struct MenuViewComponent {
 }
 
 impl MenuViewComponent {
-    pub fn new(action_tx: UnboundedSender<Action>) -> Self {
+    pub fn new(action_tx: UnboundedSender<Action>, keybindings: &Keybindings) -> Self {
+        let mut keys = vec![Vec::new(); 3];
+        for (k, v) in &keybindings.column {
+            match v {
+                ColumnAction::NewPost => keys[0].push(k),
+                ColumnAction::Refresh => keys[1].push(k),
+                ColumnAction::Back => keys[2].push(k),
+                _ => {}
+            }
+        }
+        keys.iter_mut().for_each(|v| v.sort());
+        let to_string = |v: &[&Key]| {
+            v.iter()
+                .filter_map(|k| serde_json::to_string(k).ok())
+                .map(|s| s.trim_matches('"').to_string())
+                .collect::<Vec<_>>()
+        };
         Self {
             action_tx,
-            items: vec![MenuAction::NewPost, MenuAction::Refresh, MenuAction::Back],
+            items: vec![
+                MenuAction::NewPost(to_string(&keys[0])),
+                MenuAction::Refresh(to_string(&keys[1])),
+                MenuAction::Back(to_string(&keys[2])),
+            ],
             state: ListState::default().with_selected(Some(0)),
         }
     }
@@ -54,9 +88,9 @@ impl MenuViewComponent {
             Action::Enter => {
                 if let Some(selected) = self.state.selected() {
                     let action = match self.items[selected] {
-                        MenuAction::NewPost => Action::NewPost,
-                        MenuAction::Refresh => Action::Refresh,
-                        MenuAction::Back => Action::Back,
+                        MenuAction::NewPost(_) => Action::NewPost,
+                        MenuAction::Refresh(_) => Action::Refresh,
+                        MenuAction::Back(_) => Action::Back,
                     };
                     self.action_tx.send(action).ok();
                     return Ok(Some(Action::Menu));

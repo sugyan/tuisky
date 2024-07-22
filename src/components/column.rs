@@ -56,7 +56,7 @@ impl ColumnComponent {
             id,
             watcher: None,
             views: Vec::new(),
-            menu: MenuViewComponent::new(view_tx.clone()),
+            menu: MenuViewComponent::new(view_tx.clone(), &config.keybindings),
             is_menu_active: false,
             config,
             action_tx,
