@@ -51,6 +51,10 @@ impl Config {
             .column
             .entry(Key(KeyCode::Char('r'), KeyModifiers::CONTROL))
             .or_insert(ColumnAction::Refresh);
+        self.keybindings
+            .column
+            .entry(Key(KeyCode::Char('x'), KeyModifiers::CONTROL))
+            .or_insert(ColumnAction::Menu);
     }
 }
 
@@ -140,7 +144,6 @@ impl<'de> Deserialize<'de> for Key {
 pub enum GlobalAction {
     NextFocus,
     PrevFocus,
-    NewPost,
     Help,
     Quit,
 }
@@ -150,7 +153,6 @@ impl From<&GlobalAction> for AppAction {
         match action {
             GlobalAction::NextFocus => Self::NextFocus,
             GlobalAction::PrevFocus => Self::PrevFocus,
-            GlobalAction::NewPost => Self::NewPost,
             GlobalAction::Help => Self::Help,
             GlobalAction::Quit => Self::Quit,
         }
@@ -164,6 +166,8 @@ pub enum ColumnAction {
     Enter,
     Back,
     Refresh,
+    NewPost,
+    Menu,
 }
 
 impl From<&ColumnAction> for ViewAction {
@@ -174,6 +178,8 @@ impl From<&ColumnAction> for ViewAction {
             ColumnAction::Enter => Self::Enter,
             ColumnAction::Back => Self::Back,
             ColumnAction::Refresh => Self::Refresh,
+            ColumnAction::NewPost => Self::NewPost,
+            ColumnAction::Menu => Self::Menu,
         }
     }
 }

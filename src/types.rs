@@ -14,7 +14,6 @@ pub enum Action {
     Render,
     NextFocus,
     PrevFocus,
-    NewPost,
     View((IdType, ViewAction)),
     Login((IdType, Box<BskyAgent>)),
 }
@@ -29,7 +28,6 @@ impl Debug for Action {
             Self::Render => write!(f, "Render"),
             Self::NextFocus => write!(f, "NextFocus"),
             Self::PrevFocus => write!(f, "PrevFocus"),
-            Self::NewPost => write!(f, "NewPost"),
             Self::View(arg) => f.debug_tuple("View").field(arg).finish(),
             Self::Login((arg, _)) => f.debug_tuple("Login").field(arg).finish(),
         }

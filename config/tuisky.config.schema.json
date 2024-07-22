@@ -26,7 +26,6 @@
                 "NextFocus",
                 "PrevFocus",
                 "Help",
-                "NewPost",
                 "Quit"
               ]
             }
@@ -43,7 +42,9 @@
                 "PrevItem",
                 "Enter",
                 "Back",
-                "Refresh"
+                "Refresh",
+                "NewPost",
+                "Menu"
               ]
             }
           },
