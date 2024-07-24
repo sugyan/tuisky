@@ -8,7 +8,7 @@
 ## Features
 
 - [x] Multiple columns, multiple session management
-- [x] Select from saved feeds
+- [x] Select from pinned feeds
 - [x] Auto refresh rows
 - [x] Auto save & restore app data
 - [x] Post texts
@@ -48,6 +48,7 @@ Column:
 - `Enter`: Select item
 - `Backspace`: Back to previous view
 - `Ctrl-r`: Refresh current view
+- `Ctrl-x`: Open/Close menu
 
 
 ### Configuration with toml file

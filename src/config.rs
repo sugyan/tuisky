@@ -160,7 +160,6 @@ impl<'de> Deserialize<'de> for Key {
 pub enum GlobalAction {
     NextFocus,
     PrevFocus,
-    Help,
     Quit,
 }
 
@@ -169,7 +168,6 @@ impl From<&GlobalAction> for AppAction {
         match action {
             GlobalAction::NextFocus => Self::NextFocus,
             GlobalAction::PrevFocus => Self::PrevFocus,
-            GlobalAction::Help => Self::Help,
             GlobalAction::Quit => Self::Quit,
         }
     }
