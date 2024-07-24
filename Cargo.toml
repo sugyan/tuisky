@@ -1,6 +1,6 @@
 [package]
 name = "tuisky"
-version = "0.0.5"
+version = "0.0.6"
 authors = ["sugyan <sugi1982+github@gmail.com>"]
 edition = "2021"
 rust-version = "1.74"
