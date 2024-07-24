@@ -51,6 +51,10 @@ impl Config {
             .column
             .entry(Key(KeyCode::Char('r'), KeyModifiers::CONTROL))
             .or_insert(ColumnAction::Refresh);
+        self.keybindings
+            .column
+            .entry(Key(KeyCode::Char('x'), KeyModifiers::CONTROL))
+            .or_insert(ColumnAction::Menu);
     }
 }
 
@@ -66,6 +70,22 @@ pub struct Key(KeyCode, KeyModifiers);
 impl From<KeyEvent> for Key {
     fn from(event: KeyEvent) -> Self {
         Self(event.code, event.modifiers)
+    }
+}
+
+#[allow(clippy::non_canonical_partial_ord_impl)]
+impl PartialOrd for Key {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.1.partial_cmp(&other.1) {
+            Some(std::cmp::Ordering::Equal) => self.0.partial_cmp(&other.0),
+            o => o,
+        }
+    }
+}
+
+impl Ord for Key {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
     }
 }
 
@@ -140,8 +160,6 @@ impl<'de> Deserialize<'de> for Key {
 pub enum GlobalAction {
     NextFocus,
     PrevFocus,
-    NewPost,
-    Help,
     Quit,
 }
 
@@ -150,8 +168,6 @@ impl From<&GlobalAction> for AppAction {
         match action {
             GlobalAction::NextFocus => Self::NextFocus,
             GlobalAction::PrevFocus => Self::PrevFocus,
-            GlobalAction::NewPost => Self::NewPost,
-            GlobalAction::Help => Self::Help,
             GlobalAction::Quit => Self::Quit,
         }
     }
@@ -164,6 +180,8 @@ pub enum ColumnAction {
     Enter,
     Back,
     Refresh,
+    NewPost,
+    Menu,
 }
 
 impl From<&ColumnAction> for ViewAction {
@@ -174,6 +192,8 @@ impl From<&ColumnAction> for ViewAction {
             ColumnAction::Enter => Self::Enter,
             ColumnAction::Back => Self::Back,
             ColumnAction::Refresh => Self::Refresh,
+            ColumnAction::NewPost => Self::NewPost,
+            ColumnAction::Menu => Self::Menu,
         }
     }
 }

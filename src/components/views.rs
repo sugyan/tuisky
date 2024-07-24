@@ -1,11 +1,18 @@
-pub mod feed;
-pub mod login;
-pub mod new_post;
-pub mod post;
-pub mod root;
+mod feed;
+mod login;
+mod menu;
+mod new_post;
+mod post;
+mod root;
 pub mod types;
 mod utils;
 
+pub use self::feed::FeedViewComponent;
+pub use self::login::LoginComponent;
+pub use self::menu::MenuViewComponent;
+pub use self::new_post::NewPostViewComponent;
+pub use self::post::PostViewComponent;
+pub use self::root::RootComponent;
 use self::types::{Action, View};
 use color_eyre::Result;
 use crossterm::event::KeyEvent;

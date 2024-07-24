@@ -1,10 +1,8 @@
-use super::views::feed::FeedViewComponent;
-use super::views::login::LoginComponent;
-use super::views::new_post::NewPostViewComponent;
-use super::views::post::PostViewComponent;
-use super::views::root::RootComponent;
 use super::views::types::{Action as ViewAction, Transition, View};
-use super::views::ViewComponent;
+use super::views::{
+    FeedViewComponent, LoginComponent, MenuViewComponent, NewPostViewComponent, PostViewComponent,
+    RootComponent, ViewComponent,
+};
 use super::Component;
 use crate::backend::Watcher;
 use crate::config::Config;
@@ -25,6 +23,8 @@ pub struct ColumnComponent {
     pub id: IdType,
     pub watcher: Option<Arc<Watcher>>,
     pub views: Vec<Box<dyn ViewComponent>>,
+    menu: MenuViewComponent,
+    pub is_menu_active: bool,
     config: Config,
     action_tx: UnboundedSender<Action>,
     view_tx: UnboundedSender<ViewAction>,
@@ -56,6 +56,8 @@ impl ColumnComponent {
             id,
             watcher: None,
             views: Vec::new(),
+            menu: MenuViewComponent::new(view_tx.clone(), &config.keybindings),
+            is_menu_active: false,
             config,
             action_tx,
             view_tx,
@@ -153,9 +155,11 @@ impl Component for ColumnComponent {
         Ok(())
     }
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        if let Some(view) = self.views.last_mut() {
-            if let Some(action) = view.handle_key_events(key)? {
-                return Ok(Some(Action::View((self.id, action))));
+        if !self.is_menu_active {
+            if let Some(view) = self.views.last_mut() {
+                if let Some(action) = view.handle_key_events(key)? {
+                    return Ok(Some(Action::View((self.id, action))));
+                }
             }
         }
         if let Some(action) = self.config.keybindings.column.get(&key.into()) {
@@ -166,20 +170,31 @@ impl Component for ColumnComponent {
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::NewPost => {
-                if self.watcher.is_some()
-                    && !self
-                        .views
-                        .last()
-                        .map(|view| view.view() == View::NewPost)
-                        .unwrap_or_default()
-                {
-                    return self.transition(&Transition::Push(Box::new(View::NewPost)));
-                }
-            }
             Action::View((id, view_action)) if id == self.id => {
-                if let ViewAction::Render = view_action {
-                    return Ok(Some(Action::Render));
+                match view_action {
+                    ViewAction::Render => {
+                        return Ok(Some(Action::Render));
+                    }
+                    ViewAction::NewPost if self.watcher.is_some() => {
+                        if !self
+                            .views
+                            .last()
+                            .map(|view| view.view() == View::NewPost)
+                            .unwrap_or_default()
+                        {
+                            return self.transition(&Transition::Push(Box::new(View::NewPost)));
+                        }
+                    }
+                    ViewAction::Menu if self.watcher.is_some() => {
+                        self.is_menu_active = !self.is_menu_active;
+                        return Ok(Some(Action::Render));
+                    }
+                    _ => {}
+                }
+                if self.is_menu_active {
+                    if let Ok(Some(action)) = self.menu.update(view_action.clone()) {
+                        return Ok(Some(Action::View((self.id, action))));
+                    }
                 }
                 return if let Some(view) = self.views.last_mut() {
                     let result = view.update(view_action);
@@ -226,9 +241,11 @@ impl Component for ColumnComponent {
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
         if let Some(view) = self.views.last_mut() {
-            view.draw(f, area)
-        } else {
-            Ok(())
+            view.draw(f, area)?;
         }
+        if self.is_menu_active {
+            self.menu.draw(f, area)?;
+        }
+        Ok(())
     }
 }

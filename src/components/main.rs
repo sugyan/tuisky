@@ -115,11 +115,17 @@ impl Component for MainComponent {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::NextFocus => {
+                if let Some(selected) = self.state.selected {
+                    self.columns[selected].is_menu_active = false;
+                }
                 self.state.selected =
                     Some(self.state.selected.map_or(0, |s| s + 1) % self.columns.len());
                 return Ok(Some(Action::Render));
             }
             Action::PrevFocus => {
+                if let Some(selected) = self.state.selected {
+                    self.columns[selected].is_menu_active = false;
+                }
                 self.state.selected = Some(
                     self.state
                         .selected
@@ -127,11 +133,6 @@ impl Component for MainComponent {
                         % self.columns.len(),
                 );
                 return Ok(Some(Action::Render));
-            }
-            Action::NewPost => {
-                if let Some(selected) = self.state.selected {
-                    return self.columns[selected].update(action);
-                }
             }
             _ => {
                 for column in self.columns.iter_mut() {
