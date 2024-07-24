@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5](https://github.com/sugyan/tuisky/compare/v0.0.4...v0.0.5) - 2024-07-24
+
+### Added
+- Add menu component ([#21](https://github.com/sugyan/tuisky/pull/21))
+- Use env logger ([#20](https://github.com/sugyan/tuisky/pull/20))
+- Update counts display ([#19](https://github.com/sugyan/tuisky/pull/19))
+- Update NewPostViewComponent, remove Escape action ([#18](https://github.com/sugyan/tuisky/pull/18))
+- Update login view, remove tui-prompts ([#17](https://github.com/sugyan/tuisky/pull/17))
+- Add NewPost component ([#16](https://github.com/sugyan/tuisky/pull/16))
+- Add pinned list view ([#14](https://github.com/sugyan/tuisky/pull/14))
+
 ## [0.0.4](https://github.com/sugyan/tuisky/compare/v0.0.3...v0.0.4) - 2024-07-11
 
 ### Added
