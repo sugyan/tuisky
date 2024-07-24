@@ -3,7 +3,7 @@
 [![](https://img.shields.io/crates/v/tuisky)](https://crates.io/crates/tuisky)
 [![](https://img.shields.io/crates/l/atrium-api)](https://github.com/sugyan/tuisky/blob/main/LICENSE)
 
-<img width="1624" alt="image" src="https://github.com/sugyan/tuisky/assets/80381/09f02bc2-eb9a-4a6a-8c0c-105cbcda09de">
+![out](https://github.com/user-attachments/assets/814291e9-8ed7-4bdf-ab4f-f62799f0c5c6)
 
 ## Features
 
