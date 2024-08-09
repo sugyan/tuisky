@@ -18,38 +18,29 @@ pub struct Image {
     pub alt: TextArea<'static>,
 }
 
-impl Default for Image {
-    fn default() -> Self {
-        let mut path = TextArea::default();
-        path.set_block(Block::bordered().title("Path"));
-        path.set_cursor_line_style(Style::default());
-        let mut alt = TextArea::default();
-        alt.set_block(Block::bordered().title("Alt").dim());
-        alt.set_cursor_line_style(Style::default());
-        alt.set_cursor_style(Style::default());
-        Self { path, alt }
-    }
-}
-
 enum Focus {
     Path,
     Alt,
     Ok,
+    Delete,
 }
 
 impl Focus {
-    fn next(&self) -> Self {
+    fn next(&self, delete: bool) -> Self {
         match self {
             Self::Path => Self::Alt,
             Self::Alt => Self::Ok,
+            Self::Ok if delete => Self::Delete,
             Self::Ok => Self::Ok,
+            Self::Delete => Self::Delete,
         }
     }
-    fn prev(&self) -> Self {
+    fn prev(&self, _: bool) -> Self {
         match self {
             Self::Path => Self::Path,
             Self::Alt => Self::Path,
             Self::Ok => Self::Alt,
+            Self::Delete => Self::Ok,
         }
     }
 }
@@ -64,14 +55,59 @@ pub struct EmbedImagesModalComponent {
     image: Image,
     focus: Focus,
     state: State,
+    index: Option<usize>,
 }
 
 impl EmbedImagesModalComponent {
-    pub fn new() -> Self {
-        Self {
-            image: Image::default(),
+    pub fn new(init: Option<(usize, ImageData)>) -> Self {
+        let (mut path, mut alt) = if let Some((_, init)) = &init {
+            (
+                TextArea::new(vec![init.path.clone()]),
+                TextArea::new(init.alt.lines().map(String::from).collect()),
+            )
+        } else {
+            (TextArea::default(), TextArea::default())
+        };
+        path.set_block(Block::bordered().title("Path"));
+        path.set_cursor_line_style(Style::default());
+        alt.set_block(Block::bordered().title("Alt").dim());
+        alt.set_cursor_line_style(Style::default());
+        alt.set_cursor_style(Style::default());
+        let image = Image { path, alt };
+
+        let mut ret = Self {
+            image,
             focus: Focus::Path,
             state: State::None,
+            index: init.map(|(i, _)| i),
+        };
+        ret.check_path();
+        ret
+    }
+    fn check_path(&mut self) {
+        if let Some(block) = self.image.path.block() {
+            let block = block.clone();
+            let path = PathBuf::from(self.image.path.lines().join(""));
+            self.state = if let Ok(metadata) = path.metadata() {
+                if metadata.is_file()
+                    && metadata.size() <= 1_000_000
+                    && ImageReader::open(path)
+                        .ok()
+                        .and_then(|reader| reader.decode().ok())
+                        .is_some()
+                {
+                    State::Ok
+                } else {
+                    State::Error
+                }
+            } else {
+                State::None
+            };
+            self.image.path.set_block(match self.state {
+                State::None => block.border_style(Color::Reset),
+                State::Ok => block.border_style(Color::Green),
+                State::Error => block.border_style(Color::Red),
+            });
         }
     }
     fn current_textarea(&mut self) -> Option<&mut TextArea<'static>> {
@@ -110,30 +146,7 @@ impl ModalComponent for EmbedImagesModalComponent {
                 }
                 let cursor = self.image.path.cursor();
                 return Ok(if self.image.path.input(key) {
-                    if let Some(block) = self.image.path.block() {
-                        let block = block.clone();
-                        let path = PathBuf::from(self.image.path.lines().join(""));
-                        self.state = if let Ok(metadata) = path.metadata() {
-                            if metadata.is_file()
-                                && metadata.size() <= 1_000_000
-                                && ImageReader::open(path)
-                                    .ok()
-                                    .and_then(|reader| reader.decode().ok())
-                                    .is_some()
-                            {
-                                State::Ok
-                            } else {
-                                State::Error
-                            }
-                        } else {
-                            State::None
-                        };
-                        self.image.path.set_block(match self.state {
-                            State::None => block.border_style(Color::Reset),
-                            State::Ok => block.border_style(Color::Green),
-                            State::Error => block.border_style(Color::Red),
-                        });
-                    }
+                    self.check_path();
                     Some(Action::Render)
                 } else if self.image.path.cursor() != cursor {
                     Some(Action::Render)
@@ -158,21 +171,30 @@ impl ModalComponent for EmbedImagesModalComponent {
     fn update(&mut self, action: ViewsAction) -> Result<Option<Action>> {
         Ok(match action {
             ViewsAction::NextItem => {
-                self.update_focus(self.focus.next());
+                self.update_focus(self.focus.next(self.index.is_some()));
                 Some(Action::Render)
             }
             ViewsAction::PrevItem => {
-                self.update_focus(self.focus.prev());
+                self.update_focus(self.focus.prev(self.index.is_some()));
                 Some(Action::Render)
             }
-            ViewsAction::Enter if matches!(self.focus, Focus::Ok) => match self.state {
-                State::Ok => Some(Action::Ok(Data::Image(ImageData {
-                    path: self.image.path.lines().join(""),
-                    alt: self.image.alt.lines().join("\n"),
-                }))),
-                _ => None,
+            ViewsAction::Enter => match self.focus {
+                Focus::Ok => {
+                    if matches!(self.state, State::Ok) {
+                        Some(Action::Ok(Data::Image((
+                            ImageData {
+                                path: self.image.path.lines().join(""),
+                                alt: self.image.alt.lines().join("\n"),
+                            },
+                            self.index,
+                        ))))
+                    } else {
+                        None
+                    }
+                }
+                Focus::Delete => Some(Action::Delete(self.index)),
+                _ => self.update(ViewsAction::NextItem)?,
             },
-            ViewsAction::Enter => self.update(ViewsAction::NextItem)?,
             ViewsAction::Back => Some(Action::Cancel),
             _ => None,
         })
@@ -182,31 +204,45 @@ impl ModalComponent for EmbedImagesModalComponent {
             horizontal: 2,
             vertical: 1,
         });
-        let [area] = Layout::vertical([Constraint::Length(10)]).areas(area);
+        let [area] = Layout::vertical([Constraint::Length(11)]).areas(area);
 
         let block = Block::bordered().title("Embed image");
         let inner = block.inner(area);
         f.render_widget(Clear, area);
         f.render_widget(block, area);
 
-        let [path, alt, ok] = Layout::vertical([
+        let mut constraints = vec![
             Constraint::Length(3),
             Constraint::Length(4),
             Constraint::Length(1),
-        ])
-        .areas(inner);
-        let mut line = Line::from("OK").centered();
-        if matches!(self.state, State::Ok) {
-            line = line.blue();
-        } else {
-            line = line.dim();
+        ];
+        if self.index.is_some() {
+            constraints.push(Constraint::Length(1));
         }
+        let layout = Layout::vertical(constraints).split(inner);
+        let mut line = Line::from("OK").centered();
+        line = match self.state {
+            State::Ok => line.blue(),
+            _ => line.dim(),
+        };
         if matches!(self.focus, Focus::Ok) {
             line = line.reversed();
         }
-        f.render_widget(self.image.path.widget(), path);
-        f.render_widget(self.image.alt.widget(), alt);
-        f.render_widget(line, ok);
+        f.render_widget(self.image.path.widget(), layout[0]);
+        f.render_widget(self.image.alt.widget(), layout[1]);
+        f.render_widget(line, layout[2]);
+        if let Some(area) = layout.get(3) {
+            f.render_widget(
+                Line::from("Delete")
+                    .centered()
+                    .red()
+                    .patch_style(match self.focus {
+                        Focus::Delete => Style::default().reversed(),
+                        _ => Style::default(),
+                    }),
+                *area,
+            )
+        }
         Ok(())
     }
 }

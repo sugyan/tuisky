@@ -292,7 +292,7 @@ impl ViewComponent for NewPostViewComponent {
                 Ok(Some(Action::Render))
             }
             Action::Enter if self.focus == Focus::Embed => {
-                self.modals = Some(Box::new(EmbedModalComponent::new()));
+                self.modals = Some(Box::new(EmbedModalComponent::new(self.embed.clone())));
                 Ok(Some(Action::Render))
             }
             Action::Enter if self.focus == Focus::Submit => {

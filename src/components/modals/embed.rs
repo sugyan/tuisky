@@ -18,11 +18,16 @@ pub struct EmbedModalComponent {
 }
 
 impl EmbedModalComponent {
-    pub fn new() -> Self {
+    pub fn new(init: Option<EmbedData>) -> Self {
+        let images = if let Some(data) = init {
+            data.images
+        } else {
+            Vec::new()
+        };
         Self {
             embeds_state: Default::default(),
             actions_state: Default::default(),
-            images: Vec::new(),
+            images,
             child: None,
         }
     }
@@ -41,12 +46,26 @@ impl ModalComponent for EmbedModalComponent {
             return Ok(match child.update(action)? {
                 Some(Action::Ok(data)) => {
                     match data {
-                        Data::Image(image) => self.images.push(image),
+                        Data::Image((image, index)) => {
+                            if let Some(i) = index {
+                                self.images[i] = image;
+                            } else {
+                                self.images.push(image)
+                            }
+                        }
                         _ => {
                             // TODO
                         }
                     }
                     self.child = None;
+                    Some(Action::Render)
+                }
+                Some(Action::Delete(index)) => {
+                    if let Some(i) = index {
+                        self.images.remove(i);
+                    }
+                    self.child = None;
+                    self.embeds_state.select(None);
                     Some(Action::Render)
                 }
                 Some(Action::Cancel) => {
@@ -97,9 +116,20 @@ impl ModalComponent for EmbedModalComponent {
                 Some(Action::Render)
             }
             ViewsAction::Enter => {
+                match self.embeds_state.selected() {
+                    Some(i) => {
+                        self.child = Some(Box::new(EmbedImagesModalComponent::new(Some((
+                            i,
+                            self.images[i].clone(),
+                        )))));
+                    }
+                    _ => {
+                        // TODO
+                    }
+                }
                 match self.actions_state.selected() {
-                    Some(0) => {
-                        self.child = Some(Box::new(EmbedImagesModalComponent::new()));
+                    Some(0) if self.images.len() < 4 => {
+                        self.child = Some(Box::new(EmbedImagesModalComponent::new(None)));
                     }
                     Some(1) => {
                         // Add external

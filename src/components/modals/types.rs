@@ -12,12 +12,13 @@ pub struct ImageData {
 #[derive(Clone)]
 pub enum Data {
     Embed(EmbedData),
-    Image(ImageData),
+    Image((ImageData, Option<usize>)),
 }
 
 #[derive(Clone)]
 pub enum Action {
     Ok(Data),
+    Delete(Option<usize>),
     Cancel,
     Render,
 }
