@@ -22,6 +22,14 @@
 cargo install tuisky
 ```
 
+### AUR
+
+You can install `tuisky` from the [AUR](https://aur.archlinux.org/packages/tuisky) with using an [AUR helper](https://wiki.archlinux.org/title/AUR_helpers).
+
+```
+paru -S tuisky
+```
+
 ## Usage
 
 ```
