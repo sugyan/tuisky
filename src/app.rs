@@ -82,13 +82,13 @@ impl App {
                     Action::Render => {
                         tui.draw(|f| {
                             // render main components to the left side
-                            if let Err(e) = main_component.draw(f, f.size()) {
+                            if let Err(e) = main_component.draw(f, f.area()) {
                                 action_tx
                                     .send(Action::Error(format!("failed to draw: {e}")))
                                     .ok();
                             }
                             for component in self.components.iter_mut() {
-                                if let Err(e) = component.draw(f, f.size()) {
+                                if let Err(e) = component.draw(f, f.area()) {
                                     action_tx
                                         .send(Action::Error(format!("failed to draw: {e}")))
                                         .ok();
@@ -123,6 +123,7 @@ impl App {
                     return Some(action);
                 }
             }
+            Event::Error(e) => log::error!("Event::Error: {e}"),
             _ => {}
         }
         None

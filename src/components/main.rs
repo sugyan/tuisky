@@ -6,7 +6,7 @@ use crate::utils::get_data_dir;
 use bsky_sdk::agent::config::Config as AgentConfig;
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect, Size};
 use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Block, BorderType};
 use ratatui::Frame;
@@ -77,7 +77,7 @@ impl MainComponent {
 }
 
 impl Component for MainComponent {
-    fn init(&mut self, rect: Rect) -> Result<()> {
+    fn init(&mut self, size: Size) -> Result<()> {
         let appdata = if let Ok(appdata) = Self::load() {
             appdata
         } else {
@@ -85,7 +85,7 @@ impl Component for MainComponent {
             AppData::default()
         };
 
-        let auto_num = usize::from(rect.width) / 75;
+        let auto_num = usize::from(size.width) / 75;
         let num_columns = self
             .config
             .num_columns
@@ -96,7 +96,7 @@ impl Component for MainComponent {
             if let Some(config) = appdata.views.get(i).and_then(|view| view.agent.as_ref()) {
                 column.init_with_config(config)?;
             } else {
-                column.init(rect)?;
+                column.init(size)?;
             }
             self.columns.push(column);
         }

@@ -12,7 +12,8 @@ use bsky_sdk::api::agent::Session;
 use bsky_sdk::BskyAgent;
 use color_eyre::{eyre, Result};
 use crossterm::event::KeyEvent;
-use ratatui::{layout::Rect, Frame};
+use ratatui::layout::{Rect, Size};
+use ratatui::Frame;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc::{self, UnboundedSender};
@@ -150,7 +151,7 @@ impl ColumnComponent {
 }
 
 impl Component for ColumnComponent {
-    fn init(&mut self, _area: Rect) -> Result<()> {
+    fn init(&mut self, _size: Size) -> Result<()> {
         self.views = vec![Box::new(LoginComponent::new(self.view_tx.clone()))];
         Ok(())
     }

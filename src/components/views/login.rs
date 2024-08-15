@@ -179,12 +179,13 @@ impl ViewComponent for LoginComponent {
             Constraint::Length(2),
         ])
         .split(block.inner(area));
+
         let mut submit = Line::from("Submit").blue().centered();
         if self.focus == Focus::Submit {
             submit = submit.reversed();
         }
-        f.render_widget(self.identifier.widget(), layout[0]);
-        f.render_widget(self.password.widget(), layout[1]);
+        f.render_widget(&self.identifier, layout[0]);
+        f.render_widget(&self.password, layout[1]);
         f.render_widget(submit, layout[2]);
         if let Ok(message) = self.error_message.read() {
             if let Some(s) = message.as_ref() {

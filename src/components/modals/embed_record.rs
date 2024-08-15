@@ -248,7 +248,7 @@ impl ModalComponent for EmbedRecordModalComponent {
                 State::Error(_) => block.border_style(Color::Red),
             });
         }
-        f.render_widget(self.input.widget(), layout[0]);
+        f.render_widget(&self.input, layout[0]);
         f.render_widget(
             match &state {
                 State::None => Line::from(""),

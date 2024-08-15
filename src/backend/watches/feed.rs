@@ -275,9 +275,7 @@ mod tests {
     use super::*;
     use bsky_sdk::api::app::bsky::actor::defs::{ProfileViewBasic, ProfileViewBasicData};
     use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPostData, PostViewData, ReasonRepostData};
-    use bsky_sdk::api::records::Record;
-    use bsky_sdk::api::types::{string::Datetime, UnknownData};
-    use ipld_core::ipld::Ipld;
+    use bsky_sdk::api::types::{string::Datetime, Unknown};
     use std::collections::BTreeMap;
 
     fn feed_view_post(cid: Cid, reason_indexed_at: Option<Datetime>) -> FeedViewPost {
@@ -304,10 +302,7 @@ mod tests {
                 indexed_at: Datetime::now(),
                 labels: None,
                 like_count: None,
-                record: Record::Unknown(UnknownData {
-                    r#type: "post".to_string(),
-                    data: Ipld::Map(BTreeMap::new()),
-                }),
+                record: Unknown::Object(BTreeMap::new()),
                 reply_count: None,
                 repost_count: None,
                 threadgate: None,

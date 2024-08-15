@@ -12,6 +12,10 @@
 - [x] Auto refresh rows
 - [x] Auto save & restore app data
 - [x] Post texts
+  - [x] Embed images
+  - [x] Embed record
+  - [ ] Embed external links
+  - [ ] Reply to post
 - [ ] Notifications, Chat, ...
 - [x] Configure with files
 - [ ] ... and more
