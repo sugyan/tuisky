@@ -180,7 +180,7 @@ impl ModalComponent for EmbedImagesModalComponent {
             }
             ViewsAction::Enter => match self.focus {
                 Focus::Ok => {
-                    if matches!(self.state, State::Ok) {
+                    if let State::Ok = self.state {
                         Some(Action::Ok(Data::Image((
                             ImageData {
                                 path: self.image.path.lines().join(""),
@@ -204,7 +204,7 @@ impl ModalComponent for EmbedImagesModalComponent {
             horizontal: 2,
             vertical: 1,
         });
-        let [area] = Layout::vertical([Constraint::Length(11)]).areas(area);
+        let [area] = Layout::vertical([Constraint::Max(11)]).areas(area);
 
         let block = Block::bordered().title("Embed image");
         let inner = block.inner(area);
@@ -225,7 +225,7 @@ impl ModalComponent for EmbedImagesModalComponent {
             State::Ok => line.blue(),
             _ => line.dim(),
         };
-        if matches!(self.focus, Focus::Ok) {
+        if let Focus::Ok = self.focus {
             line = line.reversed();
         }
         f.render_widget(self.image.path.widget(), layout[0]);

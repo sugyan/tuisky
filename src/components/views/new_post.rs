@@ -2,8 +2,10 @@ use super::super::modals::types::{Action as ModalAction, Data, EmbedData};
 use super::super::modals::{EmbedModalComponent, ModalComponent};
 use super::types::{Action, Transition, View};
 use super::ViewComponent;
-use bsky_sdk::api::types::string::Datetime;
-use bsky_sdk::api::types::string::Language;
+use bsky_sdk::api::app::bsky::embed::{self, record_with_media};
+use bsky_sdk::api::app::bsky::feed::post::{RecordData, RecordEmbedRefs};
+use bsky_sdk::api::com::atproto::repo::{create_record, strong_ref};
+use bsky_sdk::api::types::string::{Datetime, Language};
 use bsky_sdk::api::types::Union;
 use bsky_sdk::rich_text::RichText;
 use bsky_sdk::BskyAgent;
@@ -25,6 +27,7 @@ use tui_textarea::TextArea;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Focus {
+    None,
     Text,
     Embed,
     Langs,
@@ -34,6 +37,7 @@ enum Focus {
 impl Focus {
     fn next(&self) -> Self {
         match self {
+            Self::None => Self::Text,
             Self::Text => Self::Embed,
             Self::Embed => Self::Langs,
             Self::Langs => Self::Submit,
@@ -42,6 +46,7 @@ impl Focus {
     }
     fn prev(&self) -> Self {
         match self {
+            Self::None => Self::Text,
             Self::Text => Self::Submit,
             Self::Embed => Self::Text,
             Self::Langs => Self::Embed,
@@ -103,7 +108,7 @@ impl NewPostViewComponent {
             }
         }
     }
-    fn submit_post(&self) -> Result<()> {
+    fn create_post_record(&self) -> Result<()> {
         let tx = self.action_tx.clone();
         let agent = self.agent.clone();
         let text = self.text.lines().join("\n");
@@ -119,85 +124,115 @@ impl NewPostViewComponent {
         )
         .filter(|v| !v.is_empty());
         tokio::spawn(async move {
-            let embed =
-                if let Some(data) = embed_data {
-                    let mut handles = Vec::new();
-                    for image in data.images {
-                        if let Ok(mut file) = File::open(&image.path) {
-                            let mut buf = Vec::new();
-                            if file.read_to_end(&mut buf).is_err() || buf.len() > 1_000_000 {
-                                continue;
-                            }
-                            if let Ok((width, height)) = ImageReader::with_format(
-                                BufReader::new(Cursor::new(&buf)),
-                                ImageFormat::from_path(&image.path).unwrap(),
-                            )
-                            .into_dimensions()
-                            {
-                                let aspect_ratio = Some(
-                                    bsky_sdk::api::app::bsky::embed::images::AspectRatioData {
-                                        width: NonZeroU64::new(width.into()).unwrap(),
-                                        height: NonZeroU64::new(height.into()).unwrap(),
-                                    }
-                                    .into(),
-                                );
-                                let agent = agent.clone();
-                                handles.push(tokio::spawn(async move {
-                                    agent.api.com.atproto.repo.upload_blob(buf).await.map(
-                                        |output| {
-                                            bsky_sdk::api::app::bsky::embed::images::ImageData {
-                                                alt: image.alt,
-                                                aspect_ratio,
-                                                image: output.data.blob,
-                                            }
-                                        },
-                                    )
-                                }));
-                            }
-                        }
-                    }
-                    let mut main =
-                        bsky_sdk::api::app::bsky::embed::images::MainData { images: Vec::new() };
-                    for image in future::join_all(handles)
-                        .await
-                        .into_iter()
-                        .flatten()
-                        .flatten()
-                    {
-                        main.images.push(image.into());
-                    }
-                    Some(Union::Refs(
-                    bsky_sdk::api::app::bsky::feed::post::RecordEmbedRefs::AppBskyEmbedImagesMain(
-                        Box::new(main.into()),
-                    ),
-                ))
-                } else {
-                    None
-                };
-            match agent
-                .create_record(bsky_sdk::api::app::bsky::feed::post::RecordData {
-                    created_at: Datetime::now(),
-                    embed,
-                    entities: None,
-                    facets: None,
-                    labels: None,
-                    langs,
-                    reply: None,
-                    tags: None,
-                    text,
-                })
-                .await
-            {
+            match Self::try_create_post_record(&agent, embed_data, langs, text).await {
                 Ok(output) => {
                     log::info!("Post created: {output:?}");
-                    tx.send(Action::Transition(Transition::Pop)).ok();
+                    if let Err(e) = tx.send(Action::Transition(Transition::Pop)) {
+                        log::error!("failed to send event: {e}");
+                    }
                 }
                 Err(e) => {
+                    // TODO: show error message
                     log::error!("failed to create post: {e}");
                 }
             }
         });
         Ok(())
+    }
+    async fn try_create_post_record(
+        agent: &BskyAgent,
+        embed_data: Option<EmbedData>,
+        langs: Option<Vec<Language>>,
+        text: String,
+    ) -> Result<create_record::Output> {
+        let embed = if let Some(data) = embed_data {
+            let mut handles = Vec::new();
+            for image in data.images {
+                let mut file = File::open(&image.path)?;
+                let mut buf = Vec::new();
+                file.read_to_end(&mut buf)?;
+                if buf.len() > 1_000_000 {
+                    log::warn!("image too large: {}", image.path);
+                    continue;
+                }
+                let (width, height) = ImageReader::with_format(
+                    BufReader::new(Cursor::new(&buf)),
+                    ImageFormat::from_path(&image.path).unwrap(),
+                )
+                .into_dimensions()?;
+                let aspect_ratio = Some(
+                    embed::images::AspectRatioData {
+                        width: NonZeroU64::new(width.into()).unwrap(),
+                        height: NonZeroU64::new(height.into()).unwrap(),
+                    }
+                    .into(),
+                );
+                let agent = agent.clone();
+                handles.push(async move {
+                    agent
+                        .api
+                        .com
+                        .atproto
+                        .repo
+                        .upload_blob(buf)
+                        .await
+                        .map(|output| embed::images::ImageData {
+                            alt: image.alt,
+                            aspect_ratio,
+                            image: output.data.blob,
+                        })
+                });
+            }
+            let mut images = embed::images::MainData { images: Vec::new() };
+            for image in future::join_all(handles).await {
+                images.images.push(image?.into());
+            }
+            Some(if let Some(record) = data.record {
+                let record_data = embed::record::MainData {
+                    record: strong_ref::MainData {
+                        cid: record.data.cid,
+                        uri: record.data.uri,
+                    }
+                    .into(),
+                };
+                if images.images.is_empty() {
+                    Union::Refs(RecordEmbedRefs::AppBskyEmbedRecordMain(Box::new(
+                        record_data.into(),
+                    )))
+                } else {
+                    Union::Refs(RecordEmbedRefs::AppBskyEmbedRecordWithMediaMain(Box::new(
+                        embed::record_with_media::MainData {
+                            media: Union::Refs(
+                                record_with_media::MainMediaRefs::AppBskyEmbedImagesMain(Box::new(
+                                    images.into(),
+                                )),
+                            ),
+                            record: record_data.into(),
+                        }
+                        .into(),
+                    )))
+                }
+            } else {
+                Union::Refs(RecordEmbedRefs::AppBskyEmbedImagesMain(Box::new(
+                    images.into(),
+                )))
+            })
+        } else {
+            None
+        };
+        Ok(agent
+            .create_record(RecordData {
+                created_at: Datetime::now(),
+                embed,
+                entities: None,
+                facets: None,
+                labels: None,
+                langs,
+                reply: None,
+                tags: None,
+                text,
+            })
+            .await?)
     }
 }
 
@@ -268,9 +303,11 @@ impl ViewComponent for NewPostViewComponent {
         if let Some(modal) = self.modals.as_mut() {
             return Ok(match modal.update(action)? {
                 Some(ModalAction::Ok(Data::Embed(embed))) => {
-                    if embed != EmbedData::default() {
-                        self.embed = Some(embed);
-                    }
+                    self.embed = if embed != EmbedData::default() {
+                        Some(embed)
+                    } else {
+                        None
+                    };
                     self.modals = None;
                     Some(Action::Render)
                 }
@@ -292,11 +329,15 @@ impl ViewComponent for NewPostViewComponent {
                 Ok(Some(Action::Render))
             }
             Action::Enter if self.focus == Focus::Embed => {
-                self.modals = Some(Box::new(EmbedModalComponent::new(self.embed.clone())));
+                self.modals = Some(Box::new(EmbedModalComponent::new(
+                    self.action_tx.clone(),
+                    self.embed.clone(),
+                )));
                 Ok(Some(Action::Render))
             }
             Action::Enter if self.focus == Focus::Submit => {
-                self.submit_post()?;
+                self.focus = Focus::None;
+                self.create_post_record()?;
                 Ok(Some(Action::Render))
             }
             Action::Back => {
@@ -319,7 +360,12 @@ impl ViewComponent for NewPostViewComponent {
         .areas(area);
         let mut embed_lines = vec![Line::from("+ Embed")];
         if let Some(embed) = &self.embed {
-            let mut line = Line::from(format!("  {} images", embed.images.len()));
+            let mut line = Line::from(match (embed.record.is_some(), embed.images.len()) {
+                (true, 0) => "  a record".into(),
+                (true, 1) => "  a record with 1 image".into(),
+                (true, len) => format!("  a record with {len} images"),
+                (false, len) => format!("  {len} images"),
+            });
             if self.focus != Focus::Embed {
                 line = line.yellow();
             }

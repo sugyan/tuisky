@@ -1,5 +1,6 @@
 mod embed;
 mod embed_images;
+mod embed_record;
 pub mod types;
 
 pub use self::embed::EmbedModalComponent;

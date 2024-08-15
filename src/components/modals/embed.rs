@@ -1,7 +1,9 @@
 use super::super::views::types::Action as ViewsAction;
 use super::embed_images::EmbedImagesModalComponent;
+use super::embed_record::EmbedRecordModalComponent;
 use super::types::{Data, EmbedData, ImageData};
 use super::{Action, ModalComponent};
+use bsky_sdk::api::com::atproto::repo::strong_ref;
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
@@ -9,24 +11,29 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Clear, List, ListState, Padding};
 use ratatui::Frame;
+use tokio::sync::mpsc::UnboundedSender;
 
 pub struct EmbedModalComponent {
+    action_tx: UnboundedSender<ViewsAction>,
     embeds_state: ListState,
     actions_state: ListState,
+    record: Option<strong_ref::Main>,
     images: Vec<ImageData>,
     child: Option<Box<dyn ModalComponent>>,
 }
 
 impl EmbedModalComponent {
-    pub fn new(init: Option<EmbedData>) -> Self {
-        let images = if let Some(data) = init {
-            data.images
+    pub fn new(action_tx: UnboundedSender<ViewsAction>, init: Option<EmbedData>) -> Self {
+        let (record, images) = if let Some(data) = init {
+            (data.record, data.images)
         } else {
-            Vec::new()
+            (None, Vec::new())
         };
         Self {
+            action_tx,
             embeds_state: Default::default(),
             actions_state: Default::default(),
+            record,
             images,
             child: None,
         }
@@ -53,6 +60,9 @@ impl ModalComponent for EmbedModalComponent {
                                 self.images.push(image)
                             }
                         }
+                        Data::Record(strong_ref) => {
+                            self.record = Some(strong_ref);
+                        }
                         _ => {
                             // TODO
                         }
@@ -61,8 +71,11 @@ impl ModalComponent for EmbedModalComponent {
                     Some(Action::Render)
                 }
                 Some(Action::Delete(index)) => {
-                    if let Some(i) = index {
-                        self.images.remove(i);
+                    match index {
+                        Some(i) => {
+                            self.images.remove(i);
+                        }
+                        None => self.record = None,
                     }
                     self.child = None;
                     self.embeds_state.select(None);
@@ -79,7 +92,7 @@ impl ModalComponent for EmbedModalComponent {
             ViewsAction::NextItem => {
                 match (self.embeds_state.selected(), self.actions_state.selected()) {
                     (Some(i), None) => {
-                        if i == self.images.len() - 1 {
+                        if i == usize::from(self.record.is_some()) + self.images.len() - 1 {
                             self.embeds_state.select(None);
                             self.actions_state.select_first();
                         } else {
@@ -101,7 +114,7 @@ impl ModalComponent for EmbedModalComponent {
                         self.embeds_state.select(Some(i.max(1) - 1));
                     }
                     (None, Some(0)) => {
-                        if !self.images.is_empty() {
+                        if usize::from(self.record.is_some()) + self.images.len() > 0 {
                             self.actions_state.select(None);
                             self.embeds_state.select_last();
                         }
@@ -117,29 +130,40 @@ impl ModalComponent for EmbedModalComponent {
             }
             ViewsAction::Enter => {
                 match self.embeds_state.selected() {
+                    Some(0) if self.record.is_some() => {
+                        if let Some(record) = &self.record {
+                            self.child = Some(Box::new(EmbedRecordModalComponent::new(
+                                self.action_tx.clone(),
+                                Some(record.uri.clone()),
+                            )));
+                        }
+                    }
                     Some(i) => {
+                        let i = i - usize::from(self.record.is_some());
                         self.child = Some(Box::new(EmbedImagesModalComponent::new(Some((
                             i,
                             self.images[i].clone(),
                         )))));
                     }
-                    _ => {
-                        // TODO
-                    }
+                    None => {}
                 }
                 match self.actions_state.selected() {
                     Some(0) if self.images.len() < 4 => {
                         self.child = Some(Box::new(EmbedImagesModalComponent::new(None)));
                     }
                     Some(1) => {
-                        // Add external
+                        // TODO: Add external
                     }
                     Some(2) => {
-                        // Add record
+                        self.child = Some(Box::new(EmbedRecordModalComponent::new(
+                            self.action_tx.clone(),
+                            None,
+                        )));
                     }
                     Some(3) => {
                         return Ok(Some(Action::Ok(Data::Embed(EmbedData {
                             images: self.images.clone(),
+                            record: self.record.clone(),
                         }))));
                     }
                     _ => {}
@@ -155,7 +179,7 @@ impl ModalComponent for EmbedModalComponent {
             horizontal: 2,
             vertical: 4,
         });
-        let [area] = Layout::vertical([Constraint::Max(2 * 4 + 2 + 3 + 1 + 2)]).areas(area);
+        let [area] = Layout::vertical([Constraint::Max(2 + 2 * 4 + 2 + 3 + 1 + 2)]).areas(area);
 
         let block = Block::bordered().title("Embed");
         let inner = block.inner(area);
@@ -163,12 +187,20 @@ impl ModalComponent for EmbedModalComponent {
         f.render_widget(block, area);
 
         let [embeds, actions] = Layout::vertical([
-            Constraint::Length(2 + 2 * self.images.len() as u16),
+            Constraint::Length(
+                2 + 2 * u16::from(self.record.is_some()) + 2 * self.images.len() as u16,
+            ),
             Constraint::Length(4),
         ])
         .areas(inner);
 
         let mut embed_items = Vec::new();
+        if let Some(record) = &self.record {
+            embed_items.push(Text::from(vec![
+                Line::from(format!("record: {}", record.uri)),
+                Line::from(format!("  {}", record.cid.as_ref())).dim(),
+            ]));
+        }
         for (i, image) in self.images.iter().enumerate() {
             embed_items.push(Text::from(vec![
                 Line::from(format!("image{}: {}", i + 1, image.path)),
@@ -189,7 +221,7 @@ impl ModalComponent for EmbedModalComponent {
         f.render_stateful_widget(
             List::new([
                 Line::from("Add images"),
-                Line::from("Add external"),
+                Line::from("Add external").dim(),
                 Line::from("Add record"),
                 Line::from("OK").centered().blue(),
             ])
