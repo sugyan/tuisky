@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0](https://github.com/sugyan/tuisky/compare/v0.0.5...v0.1.0) - 2024-08-16
+
+### Added
+- Update dependencies ([#25](https://github.com/sugyan/tuisky/pull/25))
+- Add embed modals to NewPost ([#24](https://github.com/sugyan/tuisky/pull/24))
+
+### Other
+- add AUR instructions ([#23](https://github.com/sugyan/tuisky/pull/23))
+- Update README.md
+
 ## [0.0.5](https://github.com/sugyan/tuisky/compare/v0.0.4...v0.0.5) - 2024-07-24
 
 ### Added
