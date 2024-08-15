@@ -1,5 +1,6 @@
 pub mod column;
 pub mod main;
+pub mod modals;
 pub mod views;
 
 use crate::config::Config;
