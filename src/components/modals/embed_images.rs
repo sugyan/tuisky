@@ -228,8 +228,8 @@ impl ModalComponent for EmbedImagesModalComponent {
         if let Focus::Ok = self.focus {
             line = line.reversed();
         }
-        f.render_widget(self.image.path.widget(), layout[0]);
-        f.render_widget(self.image.alt.widget(), layout[1]);
+        f.render_widget(&self.image.path, layout[0]);
+        f.render_widget(&self.image.alt, layout[1]);
         f.render_widget(line, layout[2]);
         if let Some(area) = layout.get(3) {
             f.render_widget(

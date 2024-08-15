@@ -394,9 +394,9 @@ impl ViewComponent for NewPostViewComponent {
                 .gray(),
             text_len,
         );
-        f.render_widget(self.text.widget(), text);
+        f.render_widget(&self.text, text);
         f.render_widget(embed_text, embed);
-        f.render_widget(self.langs.widget(), langs);
+        f.render_widget(&self.langs, langs);
         f.render_widget(submit_line, submit);
 
         for modal in self.modals.iter_mut() {

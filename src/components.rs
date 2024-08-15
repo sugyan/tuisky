@@ -7,7 +7,8 @@ use crate::config::Config;
 use crate::types::{Action, Event};
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyEvent, MouseEvent};
-use ratatui::{layout::Rect, Frame};
+use ratatui::layout::{Rect, Size};
+use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
@@ -50,7 +51,7 @@ pub trait Component {
     ///
     /// * `Result<()>` - An Ok result or an error.
     #[allow(unused_variables)]
-    fn init(&mut self, area: Rect) -> Result<()> {
+    fn init(&mut self, size: Size) -> Result<()> {
         Ok(())
     }
     /// Handle incoming events and produce actions if necessary.
