@@ -145,6 +145,7 @@ impl NewPostViewComponent {
         langs: Option<Vec<Language>>,
         text: String,
     ) -> Result<create_record::Output> {
+        let rich_text = RichText::new_with_detect_facets(text).await?;
         let embed = if let Some(data) = embed_data {
             let mut handles = Vec::new();
             for image in data.images {
@@ -225,12 +226,12 @@ impl NewPostViewComponent {
                 created_at: Datetime::now(),
                 embed,
                 entities: None,
-                facets: None,
+                facets: rich_text.facets,
                 labels: None,
                 langs,
                 reply: None,
                 tags: None,
-                text,
+                text: rich_text.text,
             })
             .await?)
     }
