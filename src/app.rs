@@ -123,6 +123,7 @@ impl App {
                     return Some(action);
                 }
             }
+            Event::Error(e) => log::error!("Event::Error: {e}"),
             _ => {}
         }
         None

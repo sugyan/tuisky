@@ -4,6 +4,7 @@ use bsky_sdk::api::app::bsky::graph::defs::ListView;
 
 #[derive(Debug, Clone)]
 pub struct PinnedFeed {
+    #[allow(dead_code)]
     pub saved_feed: SavedFeed,
     pub info: FeedSourceInfo,
 }
