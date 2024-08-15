@@ -11,10 +11,10 @@ use bsky_sdk::api::app::bsky::feed::defs::{
     PostView, PostViewData, PostViewEmbedRefs, ThreadViewPostParentRefs, ViewerStateData,
 };
 use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
+use bsky_sdk::api::app::bsky::feed::post;
 use bsky_sdk::api::app::bsky::richtext::facet::MainFeaturesItem;
-use bsky_sdk::api::records::{KnownRecord, Record};
 use bsky_sdk::api::types::string::Datetime;
-use bsky_sdk::api::types::Union;
+use bsky_sdk::api::types::{TryFromUnknown, Union};
 use bsky_sdk::{api, BskyAgent};
 use chrono::Local;
 use color_eyre::Result;
@@ -123,7 +123,7 @@ impl PostViewComponent {
             actions.push(PostAction::Delete);
         }
         let mut links = IndexSet::new();
-        if let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &post_view.record {
+        if let Ok(record) = post::Record::try_from_unknown(post_view.record.clone()) {
             if let Some(facets) = &record.facets {
                 for facet in facets {
                     for feature in &facet.features {
@@ -132,7 +132,7 @@ impl PostViewComponent {
                                 // TODO
                             }
                             Union::Refs(MainFeaturesItem::Link(link)) => {
-                                links.insert(link.uri.as_str());
+                                links.insert(link.uri.clone());
                             }
                             Union::Refs(MainFeaturesItem::Tag(_)) => {
                                 // TODO
@@ -147,11 +147,11 @@ impl PostViewComponent {
             match embed {
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
                     for image in &images.images {
-                        links.insert(image.fullsize.as_str());
+                        links.insert(image.fullsize.clone());
                     }
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(external)) => {
-                    links.insert(external.external.uri.as_str());
+                    links.insert(external.external.uri.clone());
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordView(record)) => {
                     actions.extend(Self::record_actions(record));
@@ -162,11 +162,11 @@ impl PostViewComponent {
                     match &record_with_media.media {
                         Union::Refs(ViewMediaRefs::AppBskyEmbedImagesView(images)) => {
                             for image in &images.images {
-                                links.insert(image.fullsize.as_str());
+                                links.insert(image.fullsize.clone());
                             }
                         }
                         Union::Refs(ViewMediaRefs::AppBskyEmbedExternalView(external)) => {
-                            links.insert(external.external.uri.as_str());
+                            links.insert(external.external.uri.clone());
                         }
                         _ => {}
                     }
@@ -177,10 +177,7 @@ impl PostViewComponent {
         }
         [
             actions,
-            links
-                .iter()
-                .map(|s| PostAction::Open(s.to_string()))
-                .collect::<Vec<_>>(),
+            links.into_iter().map(PostAction::Open).collect::<Vec<_>>(),
         ]
         .concat()
     }
@@ -207,7 +204,7 @@ impl PostViewComponent {
         actions
     }
     fn post_view_rows(post_view: &PostView, width: u16) -> Option<Vec<Row>> {
-        let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &post_view.record else {
+        let Ok(record) = post::Record::try_from_unknown(post_view.record.clone()) else {
             return None;
         };
         let mut author_lines = vec![Line::from(post_view.author.handle.as_str())];
@@ -389,7 +386,7 @@ impl PostViewComponent {
     fn record_lines(record: &record::View, width: u16) -> Vec<Line> {
         match &record.record {
             Union::Refs(ViewRecordRefs::ViewRecord(view_record)) => {
-                if let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &view_record.value {
+                if let Ok(record) = post::Record::try_from_unknown(view_record.value.clone()) {
                     return [
                         vec![
                             Line::from(

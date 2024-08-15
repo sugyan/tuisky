@@ -6,8 +6,8 @@ use crate::backend::{Watch, Watcher};
 use bsky_sdk::api::app::bsky::feed::defs::{
     FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
 };
-use bsky_sdk::api::records::{KnownRecord, Record};
-use bsky_sdk::api::types::Union;
+use bsky_sdk::api::app::bsky::feed::post;
+use bsky_sdk::api::types::{TryFromUnknown, Union};
 use chrono::Local;
 use color_eyre::Result;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -46,8 +46,7 @@ impl FeedViewComponent {
         }
     }
     fn lines(feed_view_post: &FeedViewPost, area: Rect) -> Option<Vec<Line>> {
-        let Record::Known(KnownRecord::AppBskyFeedPost(record)) = &feed_view_post.post.record
-        else {
+        let Ok(record) = post::Record::try_from_unknown(feed_view_post.post.record.clone()) else {
             return None;
         };
         let mut lines = Vec::new();
