@@ -302,6 +302,7 @@ mod tests {
                 indexed_at: Datetime::now(),
                 labels: None,
                 like_count: None,
+                quote_count: None,
                 record: Unknown::Object(BTreeMap::new()),
                 reply_count: None,
                 repost_count: None,
