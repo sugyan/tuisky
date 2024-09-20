@@ -48,9 +48,10 @@ pub fn counts(post_view: &PostView, pad: usize) -> Vec<Span> {
         reposted = viewer.repost.is_some();
         liked = viewer.like.is_some();
     }
-    let (replies, reposts, likes) = (
+    let (replies, reposts, quotes, likes) = (
         post_view.reply_count.unwrap_or_default(),
         post_view.repost_count.unwrap_or_default(),
+        post_view.quote_count.unwrap_or_default(),
         post_view.like_count.unwrap_or_default(),
     );
     let style = |b| {
@@ -69,6 +70,9 @@ pub fn counts(post_view: &PostView, pad: usize) -> Vec<Span> {
             style(reposts > 0)
         }),
         Span::from(" reposts").style(style(reposts > 0)),
+        Span::from(", ").dim(),
+        Span::from(format!("{quotes:pad$}")).style(style(reposts > 0)),
+        Span::from(" quotes").style(style(reposts > 0)),
         Span::from(", ").dim(),
         Span::from(format!("{likes:pad$}")).style(if liked {
             Style::default().red()
