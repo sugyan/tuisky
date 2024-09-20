@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/sugyan/tuisky/compare/v0.1.1...v0.1.2) - 2024-09-20
+
+### Added
+
+- Add quote counts ([#30](https://github.com/sugyan/tuisky/pull/30))
+
+### Fixed
+
+- Update dependencies ([#28](https://github.com/sugyan/tuisky/pull/28))
+
 ## [0.1.1](https://github.com/sugyan/tuisky/compare/v0.1.0...v0.1.1) - 2024-08-15
 
 ### Added
