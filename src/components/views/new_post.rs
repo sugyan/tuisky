@@ -162,7 +162,7 @@ impl NewPostViewComponent {
                 )
                 .into_dimensions()?;
                 let aspect_ratio = Some(
-                    embed::images::AspectRatioData {
+                    embed::defs::AspectRatioData {
                         width: NonZeroU64::new(width.into()).unwrap(),
                         height: NonZeroU64::new(height.into()).unwrap(),
                     }

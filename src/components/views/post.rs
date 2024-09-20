@@ -491,6 +491,7 @@ impl ViewComponent for PostViewComponent {
                             let (agent, tx) = (self.agent.clone(), self.action_tx.clone());
                             let mut viewer = self.post_view.viewer.clone().unwrap_or(
                                 ViewerStateData {
+                                    embedding_disabled: None,
                                     like: None,
                                     reply_disabled: None,
                                     repost: None,
@@ -575,6 +576,7 @@ impl ViewComponent for PostViewComponent {
                                         indexed_at: view_record.indexed_at.clone(),
                                         labels: view_record.labels.clone(),
                                         like_count: view_record.like_count,
+                                        quote_count: view_record.quote_count,
                                         record: view_record.value.clone(),
                                         reply_count: view_record.reply_count,
                                         repost_count: view_record.repost_count,
