@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/sugyan/tuisky/compare/v0.1.2...v0.1.3) - 2024-10-31
+
+### Added
+
+- Add `service` input to login form ([#32](https://github.com/sugyan/tuisky/pull/32))
+
+### Other
+
+- Update dependencies ([#34](https://github.com/sugyan/tuisky/pull/34))
+
 ## [0.1.2](https://github.com/sugyan/tuisky/compare/v0.1.1...v0.1.2) - 2024-09-20
 
 ### Added
