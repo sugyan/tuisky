@@ -134,23 +134,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-trait"
-version = "0.1.82"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a27b8a3a6e1a44fa4c8baf1f653e4172e81486d4941f2237e20dc2d0cf4ddff1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.77",
-]
-
-[[package]]
 name = "atrium-api"
-version = "0.24.5"
+version = "0.24.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "492c2de9cef57fb961ebaecdf296c8877592e5f9d5c7ce80595f3c8fcf6e4e91"
+checksum = "ee68ddf7cde9eb121eed3a28b138f6a9b4c4a90ab0c5c2e38bc2817af0b06da3"
 dependencies = [
- "async-trait",
  "atrium-xrpc",
  "chrono",
  "http",
@@ -162,29 +150,29 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "trait-variant",
 ]
 
 [[package]]
 name = "atrium-xrpc"
-version = "0.11.4"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26dd75fe47ef348dacda21bfebac9ea0da6d98f47e0da0991f6700b20c8d26f8"
+checksum = "737eea1de2eb174bbfe720619cb25a22c30b9640ae0d3b78386cedf007712963"
 dependencies = [
- "async-trait",
  "http",
  "serde",
  "serde_html_form",
  "serde_json",
  "thiserror",
+ "trait-variant",
 ]
 
 [[package]]
 name = "atrium-xrpc-client"
-version = "0.5.7"
+version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f84b6387257106caaa7087be1c8a44f9040e0a3f4c116211f774d7758c21d718"
+checksum = "bccdf321239d0c634f012720f4f35f34cb8b79ebcde04820ffb3a4bb38ad8cf1"
 dependencies = [
- "async-trait",
  "atrium-xrpc",
  "reqwest",
 ]
@@ -239,12 +227,11 @@ dependencies = [
 
 [[package]]
 name = "bsky-sdk"
-version = "0.1.10"
+version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac0412095184a3c051d4733cb186842e74801c9081682f9ece5d79520fd1a6aa"
+checksum = "791b6ad2177fbed91c56ed6f8be24300a8fa8bd05e5d10eb66e56fbe62fa276b"
 dependencies = [
  "anyhow",
- "async-trait",
  "atrium-api",
  "atrium-xrpc-client",
  "chrono",
@@ -253,6 +240,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "trait-variant",
  "unicode-segmentation",
 ]
 
@@ -900,6 +888,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indoc"
+version = "2.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
+
+[[package]]
 name = "instability"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1338,23 +1332,23 @@ dependencies = [
 
 [[package]]
 name = "ratatui"
-version = "0.28.1"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdef7f9be5c0122f890d58bdf4d964349ba6a6161f705907526d891efabba57d"
+checksum = "eabd94c2f37801c20583fc49dd5cd6b0ba68c716787c2dd6ed18571e1e63117b"
 dependencies = [
  "bitflags 2.6.0",
  "cassowary",
  "compact_str",
  "crossterm",
+ "indoc",
  "instability",
  "itertools",
  "lru",
  "paste",
  "strum",
- "strum_macros",
  "unicode-segmentation",
  "unicode-truncate",
- "unicode-width",
+ "unicode-width 0.2.0",
 ]
 
 [[package]]
@@ -1775,7 +1769,7 @@ checksum = "23d434d3f8967a09480fb04132ebe0a3e088c173e6d0ee7897abbdf4eab0f8b9"
 dependencies = [
  "smawk",
  "unicode-linebreak",
- "unicode-width",
+ "unicode-width 0.1.14",
 ]
 
 [[package]]
@@ -1976,6 +1970,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "trait-variant"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70977707304198400eb4835a78f6a9f928bf41bba420deb8fdb175cd965d77a7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.77",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1983,13 +1988,13 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tui-textarea"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29c07084342a575cea919eea996b9658a358c800b03d435df581c1d7c60e065a"
+checksum = "0a5318dd619ed73c52a9417ad19046724effc1287fb75cdcc4eca1d6ac1acbae"
 dependencies = [
  "crossterm",
  "ratatui",
- "unicode-width",
+ "unicode-width 0.2.0",
 ]
 
 [[package]]
@@ -2060,7 +2065,7 @@ checksum = "b3644627a5af5fa321c95b9b235a72fd24cd29c648c2c379431e6628655627bf"
 dependencies = [
  "itertools",
  "unicode-segmentation",
- "unicode-width",
+ "unicode-width 0.1.14",
 ]
 
 [[package]]
@@ -2068,6 +2073,12 @@ name = "unicode-width"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
+
+[[package]]
+name = "unicode-width"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fc81956842c57dac11422a97c3b8195a1ff727f06e85c84ed2e8aa277c9a0fd"
 
 [[package]]
 name = "unsigned-varint"
