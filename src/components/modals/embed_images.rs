@@ -9,7 +9,6 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Clear};
 use ratatui::Frame;
-use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use tui_textarea::TextArea;
 
@@ -90,7 +89,7 @@ impl EmbedImagesModalComponent {
             let path = PathBuf::from(self.image.path.lines().join(""));
             self.state = if let Ok(metadata) = path.metadata() {
                 if metadata.is_file()
-                    && metadata.size() <= 1_000_000
+                    && metadata.len() <= 1_000_000
                     && ImageReader::open(path)
                         .ok()
                         .and_then(|reader| reader.decode().ok())
