@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/sugyan/tuisky/compare/v0.1.3...v0.1.4) - 2024-11-14
+
+### Other
+
+- Fix default config path ([#38](https://github.com/sugyan/tuisky/pull/38))
+- Update README
+
 ## [0.1.3](https://github.com/sugyan/tuisky/compare/v0.1.2...v0.1.3) - 2024-10-31
 
 ### Added
