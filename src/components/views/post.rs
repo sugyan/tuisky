@@ -493,6 +493,7 @@ impl ViewComponent for PostViewComponent {
                                 ViewerStateData {
                                     embedding_disabled: None,
                                     like: None,
+                                    pinned: None,
                                     reply_disabled: None,
                                     repost: None,
                                     thread_muted: None,
