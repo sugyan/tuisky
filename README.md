@@ -80,7 +80,7 @@ Ctrl-n = "NextItem"
 Ctrl-p = "PrevItem"
 
 [watcher.intervals]
-feed_view_posts = 20
+feed = 20
 ```
 
 The config schema can be referenced by [JSON Schema](./config/tuisky.config.schema.json).
