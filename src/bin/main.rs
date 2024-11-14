@@ -30,7 +30,7 @@ impl Args {
     fn default_config_path() -> Result<PathBuf> {
         let config_dir = get_config_dir()?;
         fs::create_dir_all(&config_dir)?;
-        Ok(config_dir.join("tuisky.config.json"))
+        Ok(config_dir.join("config.toml"))
     }
 }
 
