@@ -9,12 +9,16 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Clear};
 use ratatui::Frame;
+use ratatui_image::picker::Picker;
+use ratatui_image::protocol::StatefulProtocol;
+use ratatui_image::StatefulImage;
 use std::path::PathBuf;
 use tui_textarea::TextArea;
 
 pub struct Image {
     pub path: TextArea<'static>,
     pub alt: TextArea<'static>,
+    pub image_protocol: Option<StatefulProtocol>,
 }
 
 enum Focus {
@@ -72,7 +76,7 @@ impl EmbedImagesModalComponent {
         alt.set_block(Block::bordered().title("Alt").dim());
         alt.set_cursor_line_style(Style::default());
         alt.set_cursor_style(Style::default());
-        let image = Image { path, alt };
+        let image = Image { path, alt, image_protocol: None };
 
         let mut ret = Self {
             image,
@@ -85,16 +89,20 @@ impl EmbedImagesModalComponent {
     }
     fn check_path(&mut self) {
         if let Some(block) = self.image.path.block() {
+            let picker = Picker::from_query_stdio()
+                .unwrap_or(Picker::from_fontsize((8, 12)));
             let block = block.clone();
             let path = PathBuf::from(self.image.path.lines().join(""));
             self.state = if let Ok(metadata) = path.metadata() {
                 if metadata.is_file()
                     && metadata.len() <= 1_000_000
-                    && ImageReader::open(path)
+                    && ImageReader::open(path.clone())
                         .ok()
                         .and_then(|reader| reader.decode().ok())
                         .is_some()
                 {
+                    let dyn_img = ImageReader::open(path).unwrap().decode().unwrap();
+                    self.image.image_protocol = Some(picker.new_resize_protocol(dyn_img));
                     State::Ok
                 } else {
                     State::Error
@@ -218,7 +226,14 @@ impl ModalComponent for EmbedImagesModalComponent {
         if self.index.is_some() {
             constraints.push(Constraint::Length(1));
         }
-        let layout = Layout::vertical(constraints).split(inner);
+
+        let mut outer_layout = Layout::horizontal(vec![Constraint::Percentage(100)]).split(inner);
+        if self.image.image_protocol.is_some() {
+            outer_layout = Layout::horizontal(vec![Constraint::Percentage(50), Constraint::Percentage(50)]).split(inner);
+        }
+
+        let inner_layout = Layout::vertical(constraints).split(outer_layout[0]);
+
         let mut line = Line::from("OK").centered();
         line = match self.state {
             State::Ok => line.blue(),
@@ -227,10 +242,10 @@ impl ModalComponent for EmbedImagesModalComponent {
         if let Focus::Ok = self.focus {
             line = line.reversed();
         }
-        f.render_widget(&self.image.path, layout[0]);
-        f.render_widget(&self.image.alt, layout[1]);
-        f.render_widget(line, layout[2]);
-        if let Some(area) = layout.get(3) {
+        f.render_widget(&self.image.path, inner_layout[0]);
+        f.render_widget(&self.image.alt, inner_layout[1]);
+        f.render_widget(line, inner_layout[2]);
+        if let Some(area) = inner_layout.get(3) {
             f.render_widget(
                 Line::from("Delete")
                     .centered()
@@ -241,6 +256,10 @@ impl ModalComponent for EmbedImagesModalComponent {
                     }),
                 *area,
             )
+        }
+        if let Some(image_protocol) = &mut self.image.image_protocol {
+            let image = StatefulImage::default();
+            f.render_stateful_widget(image, *outer_layout.last().unwrap(), image_protocol);
         }
         Ok(())
     }
