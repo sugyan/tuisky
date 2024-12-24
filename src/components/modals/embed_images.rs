@@ -63,7 +63,7 @@ pub struct EmbedImagesModalComponent {
 }
 
 impl EmbedImagesModalComponent {
-    pub fn new(init: Option<(usize, ImageData)>) -> Self {
+    pub fn new(init: Option<(usize, ImageData)>, protocol_picker: Picker) -> Self {
         let (mut path, mut alt) = if let Some((_, init)) = &init {
             (
                 TextArea::new(vec![init.path.clone()]),
@@ -88,10 +88,7 @@ impl EmbedImagesModalComponent {
             focus: Focus::Path,
             state: State::None,
             index: init.map(|(i, _)| i),
-            // TODO: this picker should be moved _much_ further out.
-            // probably as far out as to app.rs, after initial render but before main loop.
-            // the annoying thing is to pass it in, through every component, to here, afterwards.
-            protocol_picker: Picker::from_query_stdio().unwrap_or(Picker::from_fontsize((8, 12))),
+            protocol_picker: protocol_picker,
         };
         ret.update_state();
         ret.set_border_style();
