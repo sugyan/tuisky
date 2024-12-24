@@ -76,7 +76,11 @@ impl EmbedImagesModalComponent {
         alt.set_block(Block::bordered().title("Alt").dim());
         alt.set_cursor_line_style(Style::default());
         alt.set_cursor_style(Style::default());
-        let image = Image { path, alt, image_protocol: None };
+        let image = Image {
+            path,
+            alt,
+            image_protocol: None,
+        };
 
         let mut ret = Self {
             image,
@@ -89,26 +93,28 @@ impl EmbedImagesModalComponent {
     }
     fn check_path(&mut self) {
         if let Some(block) = self.image.path.block() {
-            let picker = Picker::from_query_stdio()
-                .unwrap_or(Picker::from_fontsize((8, 12)));
+            let picker = Picker::from_query_stdio().unwrap_or(Picker::from_fontsize((8, 12)));
             let block = block.clone();
             let path = PathBuf::from(self.image.path.lines().join(""));
-            self.state = if let Ok(metadata) = path.metadata() {
-                if metadata.is_file()
-                    && metadata.len() <= 1_000_000
-                    && ImageReader::open(path.clone())
+            if let Ok(metadata) = path.metadata() {
+                if metadata.is_file() && metadata.len() <= 1_000_000 {
+                    let dyn_image = ImageReader::open(path.clone())
                         .ok()
-                        .and_then(|reader| reader.decode().ok())
-                        .is_some()
-                {
-                    let dyn_img = ImageReader::open(path).unwrap().decode().unwrap();
-                    self.image.image_protocol = Some(picker.new_resize_protocol(dyn_img));
-                    State::Ok
+                        .and_then(|reader| reader.decode().ok());
+                    if let Some(image) = dyn_image {
+                        self.image.image_protocol = Some(picker.new_resize_protocol(image));
+                        self.state = State::Ok;
+                    } else {
+                        self.image.image_protocol = None;
+                        self.state = State::Error;
+                    }
                 } else {
-                    State::Error
+                    self.image.image_protocol = None;
+                    self.state = State::Error;
                 }
             } else {
-                State::None
+                self.image.image_protocol = None;
+                self.state = State::None;
             };
             self.image.path.set_block(match self.state {
                 State::None => block.border_style(Color::Reset),
@@ -229,7 +235,9 @@ impl ModalComponent for EmbedImagesModalComponent {
 
         let mut outer_layout = Layout::horizontal(vec![Constraint::Percentage(100)]).split(inner);
         if self.image.image_protocol.is_some() {
-            outer_layout = Layout::horizontal(vec![Constraint::Percentage(50), Constraint::Percentage(50)]).split(inner);
+            outer_layout =
+                Layout::horizontal(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
+                    .split(inner);
         }
 
         let inner_layout = Layout::vertical(constraints).split(outer_layout[0]);
@@ -258,8 +266,10 @@ impl ModalComponent for EmbedImagesModalComponent {
             )
         }
         if let Some(image_protocol) = &mut self.image.image_protocol {
-            let image = StatefulImage::default();
-            f.render_stateful_widget(image, *outer_layout.last().unwrap(), image_protocol);
+            if let Some(area) = outer_layout.get(1) {
+                let image = StatefulImage::default();
+                f.render_stateful_widget(image, *area, image_protocol);
+            }
         }
         Ok(())
     }
