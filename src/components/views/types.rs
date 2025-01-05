@@ -1,9 +1,17 @@
-use crate::backend::types::{FeedSourceInfo, PinnedFeed};
-use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, PostView, ViewerState};
-use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
-use bsky_sdk::api::types::Union;
-use bsky_sdk::BskyAgent;
-use std::fmt::{Debug, Formatter, Result};
+use {
+    crate::backend::types::{FeedSourceInfo, PinnedFeed},
+    bsky_sdk::{
+        api::{
+            app::bsky::feed::{
+                defs::{FeedViewPost, PostView, ViewerState},
+                get_post_thread::OutputThreadRefs,
+            },
+            types::Union,
+        },
+        BskyAgent,
+    },
+    std::fmt::{Debug, Formatter, Result},
+};
 
 #[derive(Clone)]
 pub enum Action {

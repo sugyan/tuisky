@@ -1,13 +1,15 @@
-use crate::components::main::MainComponent;
-use crate::components::Component;
-use crate::config::Config;
-use crate::tui::{io, Tui};
-use crate::types::{Action, Event};
-use color_eyre::Result;
-use crossterm::event::KeyEvent;
-use ratatui::backend::CrosstermBackend;
-use ratatui::Terminal;
-use tokio::sync::mpsc;
+use {
+    crate::{
+        components::{main::MainComponent, Component},
+        config::Config,
+        tui::{io, Tui},
+        types::{Action, Event},
+    },
+    color_eyre::Result,
+    crossterm::event::KeyEvent,
+    ratatui::{backend::CrosstermBackend, Terminal},
+    tokio::sync::mpsc,
+};
 
 pub struct App {
     config: Config,
@@ -15,6 +17,7 @@ pub struct App {
 }
 
 impl App {
+    #[must_use]
     pub fn new(config: Config) -> Self {
         log::debug!("App::new({config:?})");
         Self {
@@ -36,15 +39,15 @@ impl App {
 
         // Setup components
         main_component.register_action_handler(action_tx.clone())?;
-        for component in self.components.iter_mut() {
+        for component in &mut self.components {
             component.register_action_handler(action_tx.clone())?;
         }
         main_component.register_config_handler(self.config.clone())?;
-        for component in self.components.iter_mut() {
+        for component in &mut self.components {
             component.register_config_handler(self.config.clone())?;
         }
         main_component.init(tui.size()?)?;
-        for component in self.components.iter_mut() {
+        for component in &mut self.components {
             component.init(tui.size()?)?;
         }
 
@@ -61,7 +64,7 @@ impl App {
                 if let Some(action) = main_component.handle_events(Some(e.clone()))? {
                     action_tx.send(action)?;
                 }
-                for component in self.components.iter_mut() {
+                for component in &mut self.components {
                     if let Some(action) = component.handle_events(Some(e.clone()))? {
                         action_tx.send(action)?;
                     }
@@ -87,7 +90,7 @@ impl App {
                                     .send(Action::Error(format!("failed to draw: {e}")))
                                     .ok();
                             }
-                            for component in self.components.iter_mut() {
+                            for component in &mut self.components {
                                 if let Err(e) = component.draw(f, f.area()) {
                                     action_tx
                                         .send(Action::Error(format!("failed to draw: {e}")))
@@ -100,7 +103,7 @@ impl App {
                         if let Some(action) = main_component.update(action.clone())? {
                             action_tx.send(action)?;
                         }
-                        for component in self.components.iter_mut() {
+                        for component in &mut self.components {
                             if let Some(action) = component.update(action.clone())? {
                                 action_tx.send(action)?;
                             }

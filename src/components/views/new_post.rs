@@ -1,29 +1,41 @@
-use super::super::modals::types::{Action as ModalAction, Data, EmbedData};
-use super::super::modals::{EmbedModalComponent, ModalComponent};
-use super::types::{Action, Transition, View};
-use super::ViewComponent;
-use bsky_sdk::api::app::bsky::embed::{self, record_with_media};
-use bsky_sdk::api::app::bsky::feed::post::{RecordData, RecordEmbedRefs};
-use bsky_sdk::api::com::atproto::repo::{create_record, strong_ref};
-use bsky_sdk::api::types::string::{Datetime, Language};
-use bsky_sdk::api::types::Union;
-use bsky_sdk::rich_text::RichText;
-use bsky_sdk::BskyAgent;
-use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use futures_util::future;
-use image::{ImageFormat, ImageReader};
-use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Color, Style, Stylize};
-use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, Borders, Padding};
-use ratatui::{layout::Rect, widgets::Paragraph, Frame};
-use std::fs::File;
-use std::io::{BufReader, Cursor, Read};
-use std::num::NonZeroU64;
-use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
-use tui_textarea::TextArea;
+use {
+    super::{
+        super::modals::{
+            types::{Action as ModalAction, Data, EmbedData},
+            {EmbedModalComponent, ModalComponent},
+        },
+        types::{Action, Transition, View},
+        ViewComponent,
+    },
+    bsky_sdk::{
+        api::app::bsky::embed::{self, record_with_media},
+        api::app::bsky::feed::post::{RecordData, RecordEmbedRefs},
+        api::com::atproto::repo::{create_record, strong_ref},
+        api::types::string::{Datetime, Language},
+        api::types::Union,
+        rich_text::RichText,
+        BskyAgent,
+    },
+    color_eyre::Result,
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    futures_util::future,
+    image::{ImageFormat, ImageReader},
+    ratatui::{
+        layout::{Constraint, Layout},
+        style::{Color, Style, Stylize},
+        text::{Line, Text},
+        widgets::{Block, Borders, Padding},
+        {layout::Rect, widgets::Paragraph, Frame},
+    },
+    std::{
+        fs::File,
+        io::{BufReader, Cursor, Read},
+        num::NonZeroU64,
+        sync::Arc,
+    },
+    tokio::sync::mpsc::UnboundedSender,
+    tui_textarea::TextArea,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Focus {
@@ -35,7 +47,7 @@ enum Focus {
 }
 
 impl Focus {
-    fn next(&self) -> Self {
+    fn next(self) -> Self {
         match self {
             Self::None => Self::Text,
             Self::Text => Self::Embed,
@@ -44,7 +56,7 @@ impl Focus {
             Self::Submit => Self::Text,
         }
     }
-    fn prev(&self) -> Self {
+    fn prev(self) -> Self {
         match self {
             Self::None => Self::Text,
             Self::Text => Self::Submit,
@@ -304,10 +316,10 @@ impl ViewComponent for NewPostViewComponent {
         if let Some(modal) = self.modals.as_mut() {
             return Ok(match modal.update(action)? {
                 Some(ModalAction::Ok(Data::Embed(embed))) => {
-                    self.embed = if embed != EmbedData::default() {
-                        Some(embed)
-                    } else {
+                    self.embed = if embed == EmbedData::default() {
                         None
+                    } else {
+                        Some(embed)
                     };
                     self.modals = None;
                     Some(Action::Render)
@@ -354,7 +366,7 @@ impl ViewComponent for NewPostViewComponent {
             Constraint::Length(2),
             Constraint::Length(1),
             Constraint::Length(8),
-            Constraint::Length(1 + self.embed.is_some() as u16),
+            Constraint::Length(1 + u16::from(self.embed.is_some())),
             Constraint::Length(3),
             Constraint::Length(1),
         ])
@@ -400,7 +412,7 @@ impl ViewComponent for NewPostViewComponent {
         f.render_widget(&self.langs, langs);
         f.render_widget(submit_line, submit);
 
-        for modal in self.modals.iter_mut() {
+        if let Some(modal) = &mut self.modals {
             modal.draw(f, area)?;
         }
         Ok(())

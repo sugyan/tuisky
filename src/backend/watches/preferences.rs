@@ -1,11 +1,15 @@
-use super::super::{Watch, Watcher};
-use bsky_sdk::{preference::Preferences, BskyAgent};
-use std::{sync::Arc, time::Duration};
-use tokio::sync::{broadcast, watch};
-use tokio::time;
+use {
+    super::super::{Watch, Watcher},
+    bsky_sdk::{preference::Preferences, BskyAgent},
+    std::{sync::Arc, time::Duration},
+    tokio::{
+        sync::{broadcast, watch},
+        time,
+    },
+};
 
 impl Watcher {
-    pub fn preferences(&self) -> impl Watch<Output = Preferences> {
+    pub fn preferences(&self) -> impl Watch<Output = Preferences> + use<> {
         let (tx, _) = broadcast::channel(1);
         PreferencesWatcher {
             agent: self.agent.clone(),

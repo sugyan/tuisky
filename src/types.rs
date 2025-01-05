@@ -1,7 +1,9 @@
-use crate::components::views::types::Action as ViewAction;
-use bsky_sdk::BskyAgent;
-use crossterm::event::{KeyEvent, MouseEvent};
-use std::fmt::{Debug, Formatter, Result};
+use {
+    crate::components::views::types::Action as ViewAction,
+    bsky_sdk::BskyAgent,
+    crossterm::event::{KeyEvent, MouseEvent},
+    std::fmt::{Debug, Formatter, Result},
+};
 
 pub type IdType = u32;
 

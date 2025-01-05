@@ -1,22 +1,25 @@
-use super::super::types::FeedSourceInfo;
-use super::super::{Watch, Watcher};
-use bsky_sdk::api::app::bsky::feed::defs::{
-    FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
+use {
+    super::super::{types::FeedSourceInfo, Watch, Watcher},
+    bsky_sdk::{
+        api::app::bsky::feed::defs::{
+            FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
+        },
+        api::types::{string::Cid, Union},
+        moderation::decision::DecisionContext,
+        preference::{FeedViewPreference, FeedViewPreferenceData, Preferences},
+        BskyAgent, Result,
+    },
+    indexmap::IndexMap,
+    std::{sync::Arc, time::Duration},
+    tokio::sync::{broadcast, watch, Mutex},
+    tokio::time,
 };
-use bsky_sdk::api::types::string::Cid;
-use bsky_sdk::api::types::Union;
-use bsky_sdk::moderation::decision::DecisionContext;
-use bsky_sdk::preference::{FeedViewPreference, FeedViewPreferenceData};
-use bsky_sdk::Result;
-use bsky_sdk::{preference::Preferences, BskyAgent};
-use indexmap::IndexMap;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::{broadcast, watch, Mutex};
-use tokio::time;
 
 impl Watcher {
-    pub fn feed(&self, feed_info: FeedSourceInfo) -> impl Watch<Output = Vec<FeedViewPost>> {
+    pub fn feed(
+        &self,
+        feed_info: FeedSourceInfo,
+    ) -> impl Watch<Output = Vec<FeedViewPost>> + use<> {
         let (tx, _) = broadcast::channel(1);
         FeedWatcher {
             feed_info,
@@ -24,7 +27,7 @@ impl Watcher {
             preferences: self.preferences(),
             period: Duration::from_secs(self.config.intervals.feed),
             tx,
-            current: Default::default(),
+            current: Arc::default(),
         }
     }
 }
@@ -45,7 +48,7 @@ where
     type Output = Vec<FeedViewPost>;
 
     fn subscribe(&self) -> tokio::sync::watch::Receiver<Self::Output> {
-        let (tx, rx) = watch::channel(Default::default());
+        let (tx, rx) = watch::channel(Vec::default());
         let updater = Updater {
             agent: self.agent.clone(),
             current: self.current.clone(),
@@ -253,7 +256,7 @@ fn filter_feed(feed_view_post: &FeedViewPost, pref: &FeedViewPreference) -> bool
         if pref.hide_replies_by_unfollowed {
             return matches!(&reply.parent,
                 Union::Refs(ReplyRefParentRefs::PostView(parent))
-                    if parent.author.viewer.as_ref().map(|viewer| viewer.following.is_some()).unwrap_or_default()
+                if parent.author.viewer.as_ref().map_or(false, |viewer| viewer.following.is_some())
             );
         }
     }

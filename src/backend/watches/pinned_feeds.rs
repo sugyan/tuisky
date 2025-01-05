@@ -1,16 +1,23 @@
-use super::super::types::{FeedSourceInfo, PinnedFeed};
-use super::super::{Watch, Watcher};
-use bsky_sdk::api::app::bsky::actor::defs::SavedFeed;
-use bsky_sdk::preference::Preferences;
-use bsky_sdk::{BskyAgent, Result};
-use futures_util::future;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::watch::Sender;
-use tokio::sync::{broadcast, watch};
+use {
+    super::super::{
+        types::{FeedSourceInfo, PinnedFeed},
+        {Watch, Watcher},
+    },
+    bsky_sdk::{
+        api::app::bsky::actor::defs::SavedFeed,
+        preference::Preferences,
+        {BskyAgent, Result},
+    },
+    futures_util::future,
+    std::{collections::HashMap, sync::Arc},
+    tokio::sync::{
+        watch::Sender,
+        {broadcast, watch},
+    },
+};
 
 impl Watcher {
-    pub fn pinned_feeds(&self) -> impl Watch<Output = Vec<PinnedFeed>> {
+    pub fn pinned_feeds(&self) -> impl Watch<Output = Vec<PinnedFeed>> + use<> {
         let (tx, _) = broadcast::channel(1);
         PinnedFeedsWatcher {
             agent: self.agent.clone(),
@@ -33,7 +40,7 @@ where
     type Output = Vec<PinnedFeed>;
 
     fn subscribe(&self) -> tokio::sync::watch::Receiver<Self::Output> {
-        let (tx, rx) = watch::channel(Default::default());
+        let (tx, rx) = watch::channel(Vec::default());
         let agent = self.agent.clone();
         let mut quit = self.tx.subscribe();
         let mut preferences = self.preferences.subscribe();

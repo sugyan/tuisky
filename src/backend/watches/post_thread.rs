@@ -1,16 +1,22 @@
-use super::super::{Watch, Watcher};
-use bsky_sdk::api::app::bsky::feed::defs::NotFoundPostData;
-use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
-use bsky_sdk::api::types::Union;
-use bsky_sdk::preference::Preferences;
-use bsky_sdk::{BskyAgent, Result};
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::{broadcast, watch};
-use tokio::time;
+use {
+    super::super::{Watch, Watcher},
+    bsky_sdk::{
+        api::{
+            app::bsky::feed::{defs::NotFoundPostData, get_post_thread::OutputThreadRefs},
+            types::Union,
+        },
+        preference::Preferences,
+        {BskyAgent, Result},
+    },
+    std::{sync::Arc, time::Duration},
+    tokio::{
+        sync::{broadcast, watch},
+        time,
+    },
+};
 
 impl Watcher {
-    pub fn post_thread(&self, uri: String) -> impl Watch<Output = Union<OutputThreadRefs>> {
+    pub fn post_thread(&self, uri: String) -> impl Watch<Output = Union<OutputThreadRefs>> + use<> {
         let (tx, _) = broadcast::channel(1);
         PostThreadWatcher {
             uri,

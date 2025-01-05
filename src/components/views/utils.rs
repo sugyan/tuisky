@@ -1,7 +1,13 @@
-use bsky_sdk::api::app::bsky::actor::defs::{ProfileView, ProfileViewBasic};
-use bsky_sdk::api::app::bsky::feed::defs::PostView;
-use ratatui::style::{Style, Stylize};
-use ratatui::text::Span;
+use {
+    bsky_sdk::api::app::bsky::{
+        actor::defs::{ProfileView, ProfileViewBasic},
+        feed::defs::PostView,
+    },
+    ratatui::{
+        style::{Style, Stylize},
+        text::Span,
+    },
+};
 
 pub trait Profile {
     fn display_name(&self) -> Option<&str>;
@@ -30,7 +36,7 @@ pub fn profile_name_as_str(author: &dyn Profile) -> &str {
     author.display_name().unwrap_or(author.handle())
 }
 
-pub fn profile_name(author: &dyn Profile) -> Vec<Span> {
+pub fn profile_name(author: &dyn Profile) -> Vec<Span<'_>> {
     if let Some(display_name) = author.display_name() {
         vec![
             Span::from(display_name.to_string()).bold(),
@@ -42,7 +48,7 @@ pub fn profile_name(author: &dyn Profile) -> Vec<Span> {
     }
 }
 
-pub fn counts(post_view: &PostView, pad: usize) -> Vec<Span> {
+pub fn counts(post_view: &PostView, pad: usize) -> Vec<Span<'_>> {
     let (mut reposted, mut liked) = (false, false);
     if let Some(viewer) = &post_view.viewer {
         reposted = viewer.repost.is_some();

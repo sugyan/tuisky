@@ -1,7 +1,4 @@
-use super::config::Config;
-use bsky_sdk::BskyAgent;
-use std::sync::Arc;
-use tokio::sync::watch;
+use {super::config::Config, bsky_sdk::BskyAgent, std::sync::Arc, tokio::sync::watch};
 
 pub trait Watch {
     type Output;

@@ -1,7 +1,9 @@
-use crate::tui;
-use color_eyre::{config::HookBuilder, eyre, Result};
-use directories::ProjectDirs;
-use std::{panic, path::PathBuf, process};
+use {
+    crate::tui,
+    color_eyre::{config::HookBuilder, eyre, Result},
+    directories::ProjectDirs,
+    std::{panic, path::PathBuf, process},
+};
 
 pub fn initialize_panic_handler() -> Result<()> {
     let (panic_hook, eyre_hook) = HookBuilder::default().into_hooks();

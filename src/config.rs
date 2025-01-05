@@ -1,9 +1,12 @@
-use crate::backend::config::Config as WatcherConfig;
-use crate::components::views::types::Action as ViewAction;
-use crate::types::Action as AppAction;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashMap;
+use {
+    crate::{
+        backend::config::Config as WatcherConfig, components::views::types::Action as ViewAction,
+        types::Action as AppAction,
+    },
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    serde::{Deserialize, Deserializer, Serialize, Serializer},
+    std::collections::HashMap,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Config {
@@ -253,7 +256,7 @@ feed = 20
                     }
                 }
             }
-        )
+        );
     }
 
     #[test]

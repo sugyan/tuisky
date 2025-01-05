@@ -1,12 +1,16 @@
-use super::types::Action;
-use crate::config::{ColumnAction, Key, Keybindings};
-use color_eyre::Result;
-use ratatui::layout::Rect;
-use ratatui::style::{Style, Stylize};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, List, ListItem, ListState};
-use ratatui::Frame;
-use tokio::sync::mpsc::UnboundedSender;
+use {
+    super::types::Action,
+    crate::config::{ColumnAction, Key, Keybindings},
+    color_eyre::Result,
+    ratatui::{
+        layout::Rect,
+        style::{Style, Stylize},
+        text::{Line, Span},
+        widgets::{Block, Clear, List, ListItem, ListState},
+        Frame,
+    },
+    tokio::sync::mpsc::UnboundedSender,
+};
 
 enum MenuAction {
     NewPost(Vec<String>),

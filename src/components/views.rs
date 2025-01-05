@@ -7,16 +7,16 @@ mod root;
 pub mod types;
 mod utils;
 
-pub use self::feed::FeedViewComponent;
-pub use self::login::LoginComponent;
-pub use self::menu::MenuViewComponent;
-pub use self::new_post::NewPostViewComponent;
-pub use self::post::PostViewComponent;
-pub use self::root::RootComponent;
 use self::types::{Action, View};
-use color_eyre::Result;
-use crossterm::event::KeyEvent;
-use ratatui::{layout::Rect, Frame};
+pub use self::{
+    feed::FeedViewComponent, login::LoginComponent, menu::MenuViewComponent,
+    new_post::NewPostViewComponent, post::PostViewComponent, root::RootComponent,
+};
+use {
+    color_eyre::Result,
+    crossterm::event::KeyEvent,
+    ratatui::{layout::Rect, Frame},
+};
 
 pub trait ViewComponent {
     fn view(&self) -> View;

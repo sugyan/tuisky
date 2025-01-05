@@ -1,19 +1,22 @@
-use super::column::ColumnComponent;
-use super::Component;
-use crate::config::Config;
-use crate::types::Action;
-use crate::utils::get_data_dir;
-use bsky_sdk::agent::config::Config as AgentConfig;
-use color_eyre::Result;
-use crossterm::event::KeyEvent;
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect, Size};
-use ratatui::style::{Style, Stylize};
-use ratatui::widgets::{Block, BorderType};
-use ratatui::Frame;
-use serde::{Deserialize, Serialize};
-use std::fs::{create_dir_all, File};
-use std::path::PathBuf;
-use tokio::sync::mpsc::UnboundedSender;
+use {
+    super::{column::ColumnComponent, Component},
+    crate::{config::Config, types::Action, utils::get_data_dir},
+    bsky_sdk::agent::config::Config as AgentConfig,
+    color_eyre::Result,
+    crossterm::event::KeyEvent,
+    ratatui::{
+        layout::{Alignment, Constraint, Direction, Layout, Rect, Size},
+        style::{Style, Stylize},
+        widgets::{Block, BorderType},
+        Frame,
+    },
+    serde::{Deserialize, Serialize},
+    std::{
+        fs::{create_dir_all, File},
+        path::PathBuf,
+    },
+    tokio::sync::mpsc::UnboundedSender,
+};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct AppData {
@@ -135,7 +138,7 @@ impl Component for MainComponent {
                 return Ok(Some(Action::Render));
             }
             _ => {
-                for column in self.columns.iter_mut() {
+                for column in &mut self.columns {
                     if let Some(action) = column.update(action.clone())? {
                         return Ok(Some(action));
                     }
