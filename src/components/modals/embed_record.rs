@@ -1,22 +1,31 @@
-use super::super::views::types::Action as ViewsAction;
-use super::types::{Action, Data};
-use super::ModalComponent;
-use bsky_sdk::agent::config::Config;
-use bsky_sdk::api::com::atproto::repo::strong_ref;
-use bsky_sdk::api::types::string::{AtIdentifier, Cid, Nsid};
-use bsky_sdk::BskyAgent;
-use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::layout::{Constraint, Layout, Margin, Rect};
-use ratatui::style::{Color, Style, Stylize};
-use ratatui::text::Line;
-use ratatui::widgets::{Block, Clear};
-use ratatui::Frame;
-use regex::Regex;
-use std::ops::Deref;
-use std::sync::{Arc, LazyLock, Mutex};
-use tokio::sync::mpsc::UnboundedSender;
-use tui_textarea::TextArea;
+use {
+    super::{
+        super::views::types::Action as ViewsAction,
+        types::{Action, Data},
+        ModalComponent,
+    },
+    bsky_sdk::{
+        agent::config::Config,
+        api::{
+            com::atproto::repo::strong_ref,
+            types::string::{AtIdentifier, Cid, Nsid},
+        },
+        BskyAgent,
+    },
+    color_eyre::Result,
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    ratatui::{
+        layout::{Constraint, Layout, Margin, Rect},
+        style::{Color, Style, Stylize},
+        text::Line,
+        widgets::{Block, Clear},
+        Frame,
+    },
+    regex::Regex,
+    std::sync::{Arc, LazyLock, Mutex},
+    tokio::sync::mpsc::UnboundedSender,
+    tui_textarea::TextArea,
+};
 
 static RE_AT_URI: LazyLock<Regex> = LazyLock::new(|| {
     // const aturiRegex =
@@ -194,7 +203,7 @@ impl ModalComponent for EmbedRecordModalComponent {
                 Focus::Ok => {
                     let uri = self.input.lines().join("");
                     let mut state = self.state.lock().unwrap();
-                    if let State::Ok(cid) = state.deref() {
+                    if let State::Ok(cid) = &*state {
                         Some(Action::Ok(Data::Record(
                             strong_ref::MainData {
                                 cid: cid.clone(),
@@ -281,7 +290,7 @@ impl ModalComponent for EmbedRecordModalComponent {
                     },
                 ),
                 *area,
-            )
+            );
         }
 
         Ok(())

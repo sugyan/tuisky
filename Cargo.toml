@@ -1,46 +1,89 @@
 [package]
-name = "tuisky"
-version = "0.1.5"
 authors = ["sugyan <sugi1982+github@gmail.com>"]
-edition = "2021"
-rust-version = "1.80"
 description = "TUI client for Bluesky"
+edition = "2021"
+exclude = ["/config"]
+keywords = ["tui", "atproto", "bluesky", "atrium"]
+license = "MIT"
+name = "tuisky"
 readme = "README.md"
 repository = "https://github.com/sugyan/tuisky"
-license = "MIT"
-keywords = ["tui", "atproto", "bluesky", "atrium"]
-exclude = ["/config"]
+rust-version = "1.80"
+version = "0.1.5"
 
 [dependencies]
-bsky-sdk = "0.1.12"
-chrono = { version = "0.4.38", default-features = false }
-clap = { version = "4.5.8", features = ["derive"] }
+bsky-sdk = "0.1.14"
+chrono = { version = "0.4.39", default-features = false }
+clap = { version = "4.5.23", features = ["derive"] }
 color-eyre = "0.6.3"
 crossterm = { version = "0.28.1", features = ["event-stream", "serde"] }
 directories = "5.0.1"
-env_logger = "0.11.3"
-futures-util = "0.3.30"
-image = { version = "0.25.2", default-features = false, features = ["jpeg", "png"] }
-indexmap = "2.2.6"
+env_logger = "0.11.6"
+futures-util = "0.3.31"
+image = { version = "0.25.5", default-features = false, features = [
+    "jpeg",
+    "png",
+] }
+indexmap = "2.7.0"
 log = "0.4.22"
-open = "5.2.0"
-ratatui = "0.29"
-regex = "1.10.6"
-serde = { version = "1.0.203", features = ["derive"] }
-serde_json = "1.0.117"
+open = "5.3.2"
+ratatui = "0.29.0"
+regex = "1.11.1"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.134"
 textwrap = "0.16.1"
-tokio = { version = "1.38.0", features = [
+tokio = { version = "1.42.0", features = [
     "macros",
     "rt-multi-thread",
     "sync",
     "time",
 ] }
-toml = "0.8.14"
+toml = "0.8.19"
 tui-textarea = "0.7.0"
 
 [dev-dependencies]
-ipld-core = "0.4.0"
+ipld-core = "0.4.1"
 
 [[bin]]
 name = "tuisky"
 path = "src/bin/main.rs"
+
+[lints.clippy]
+cargo = "allow"
+complexity = "deny"
+correctness = "deny"
+pedantic = "allow"
+perf = "deny"
+style = "deny"
+suspicious = "deny"
+
+[lints.rust]
+future-incompatible = "deny"
+keyword-idents = "deny"
+let-underscore = "deny"
+nonstandard-style = "deny"
+refining-impl-trait = "deny"
+rust-2018-compatibility = "deny"
+rust-2018-idioms = "deny"
+rust-2021-compatibility = "deny"
+rust-2024-compatibility = "deny"
+unused = "deny"
+warnings = "deny"
+
+[profile.dev]
+codegen-units = 256
+debug = true
+incremental = true
+lto = false
+opt-level = 0
+panic = "unwind"
+strip = false
+
+[profile.release]
+codegen-units = 1
+debug = "none"
+incremental = false
+lto = "fat"
+opt-level = 3
+panic = "abort"
+strip = true

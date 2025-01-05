@@ -1,17 +1,26 @@
-use super::types::{Action, Transition, View};
-use super::utils::profile_name_as_str;
-use super::ViewComponent;
-use crate::backend::types::{FeedSourceInfo, PinnedFeed};
-use crate::backend::{Watch, Watcher};
-use crate::components::views::types::Data;
-use color_eyre::Result;
-use ratatui::style::{Style, Stylize};
-use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, List, ListState, Padding};
-use ratatui::{layout::Rect, Frame};
-use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::oneshot;
+use {
+    super::{
+        types::{Action, Transition, View},
+        utils::profile_name_as_str,
+        ViewComponent,
+    },
+    crate::{
+        backend::{
+            types::{FeedSourceInfo, PinnedFeed},
+            {Watch, Watcher},
+        },
+        components::views::types::Data,
+    },
+    color_eyre::Result,
+    ratatui::{
+        style::{Style, Stylize},
+        text::{Line, Span, Text},
+        widgets::{Block, List, ListState, Padding},
+        {layout::Rect, Frame},
+    },
+    std::sync::Arc,
+    tokio::sync::{mpsc::UnboundedSender, oneshot},
+};
 
 pub struct RootComponent {
     items: Vec<PinnedFeed>,

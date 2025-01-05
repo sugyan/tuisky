@@ -1,10 +1,12 @@
-use clap::Parser;
-use color_eyre::Result;
-use std::path::PathBuf;
-use std::{env, fs};
-use tuisky::app::App;
-use tuisky::config::Config;
-use tuisky::utils::{get_config_dir, initialize_panic_handler};
+use {
+    clap::Parser,
+    color_eyre::Result,
+    std::path::PathBuf,
+    std::{env, fs},
+    tuisky::app::App,
+    tuisky::config::Config,
+    tuisky::utils::{get_config_dir, initialize_panic_handler},
+};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

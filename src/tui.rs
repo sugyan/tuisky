@@ -1,18 +1,26 @@
-use crate::types::Event;
-use color_eyre::Result;
-use crossterm::event::{Event as CrosstermEvent, EventStream};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
-use crossterm::{cursor, execute};
-use futures_util::{FutureExt, StreamExt};
-use ratatui::backend::Backend;
-use ratatui::Terminal;
-use std::io::{stdout, Write};
-use std::ops::{Deref, DerefMut};
-use std::time::Duration;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tokio::task::JoinHandle;
-use tokio::time;
+use {
+    crate::types::Event,
+    color_eyre::Result,
+    crossterm::{
+        event::{Event as CrosstermEvent, EventStream},
+        terminal::{
+            {disable_raw_mode, enable_raw_mode}, {EnterAlternateScreen, LeaveAlternateScreen},
+        },
+        {cursor, execute},
+    },
+    futures_util::{FutureExt, StreamExt},
+    ratatui::{backend::Backend, Terminal},
+    std::{
+        io::{stdout, Write},
+        ops::{Deref, DerefMut},
+        time::Duration,
+    },
+    tokio::{
+        sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+        task::JoinHandle,
+        time,
+    },
+};
 
 pub fn io() -> impl Write {
     stdout()

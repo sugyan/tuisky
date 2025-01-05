@@ -4,12 +4,13 @@ mod embed_record;
 pub mod types;
 
 pub use self::embed::EmbedModalComponent;
-use self::types::Action;
-use super::views::types::Action as ViewsAction;
-use color_eyre::Result;
-use crossterm::event::KeyEvent;
-use ratatui::layout::Rect;
-use ratatui::Frame;
+use {
+    self::types::Action,
+    super::views::types::Action as ViewsAction,
+    color_eyre::Result,
+    crossterm::event::KeyEvent,
+    ratatui::{layout::Rect, Frame},
+};
 
 pub trait ModalComponent {
     #[allow(unused_variables)]

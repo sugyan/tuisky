@@ -1,22 +1,30 @@
-use super::views::types::{Action as ViewAction, Transition, View};
-use super::views::{
-    FeedViewComponent, LoginComponent, MenuViewComponent, NewPostViewComponent, PostViewComponent,
-    RootComponent, ViewComponent,
+use {
+    super::{
+        views::{
+            types::{Action as ViewAction, Transition, View},
+            FeedViewComponent, LoginComponent, MenuViewComponent, NewPostViewComponent,
+            PostViewComponent, RootComponent, ViewComponent,
+        },
+        Component,
+    },
+    crate::{
+        backend::Watcher,
+        config::Config,
+        types::{Action, IdType},
+    },
+    bsky_sdk::{agent::config::Config as AgentConfig, api::agent::Session, BskyAgent},
+    color_eyre::{eyre, Result},
+    crossterm::event::KeyEvent,
+    ratatui::{
+        layout::{Rect, Size},
+        Frame,
+    },
+    std::sync::{
+        atomic::{AtomicU32, Ordering},
+        {Arc, RwLock},
+    },
+    tokio::sync::mpsc::{self, UnboundedSender},
 };
-use super::Component;
-use crate::backend::Watcher;
-use crate::config::Config;
-use crate::types::{Action, IdType};
-use bsky_sdk::agent::config::Config as AgentConfig;
-use bsky_sdk::api::agent::Session;
-use bsky_sdk::BskyAgent;
-use color_eyre::{eyre, Result};
-use crossterm::event::KeyEvent;
-use ratatui::layout::{Rect, Size};
-use ratatui::Frame;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, RwLock};
-use tokio::sync::mpsc::{self, UnboundedSender};
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -180,8 +188,7 @@ impl Component for ColumnComponent {
                         if !self
                             .views
                             .last()
-                            .map(|view| view.view() == View::NewPost)
-                            .unwrap_or_default()
+                            .is_some_and(|view| view.view() == View::NewPost)
                         {
                             return self.transition(&Transition::Push(Box::new(View::NewPost)));
                         }

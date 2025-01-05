@@ -1,16 +1,22 @@
-use super::super::views::types::Action as ViewsAction;
-use super::types::{Action, Data, ImageData};
-use super::ModalComponent;
-use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use image::ImageReader;
-use ratatui::layout::{Constraint, Layout, Margin, Rect};
-use ratatui::style::{Color, Style, Stylize};
-use ratatui::text::Line;
-use ratatui::widgets::{Block, Clear};
-use ratatui::Frame;
-use std::path::PathBuf;
-use tui_textarea::TextArea;
+use {
+    super::{
+        super::views::types::Action as ViewsAction,
+        types::{Action, Data, ImageData},
+        ModalComponent,
+    },
+    color_eyre::Result,
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    image::ImageReader,
+    ratatui::{
+        layout::{Constraint, Layout, Margin, Rect},
+        style::{Color, Style, Stylize},
+        text::Line,
+        widgets::{Block, Clear},
+        Frame,
+    },
+    std::path::PathBuf,
+    tui_textarea::TextArea,
+};
 
 pub struct Image {
     pub path: TextArea<'static>,
@@ -240,7 +246,7 @@ impl ModalComponent for EmbedImagesModalComponent {
                         _ => Style::default(),
                     }),
                 *area,
-            )
+            );
         }
         Ok(())
     }

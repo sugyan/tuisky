@@ -1,17 +1,23 @@
-use super::super::views::types::Action as ViewsAction;
-use super::embed_images::EmbedImagesModalComponent;
-use super::embed_record::EmbedRecordModalComponent;
-use super::types::{Data, EmbedData, ImageData};
-use super::{Action, ModalComponent};
-use bsky_sdk::api::com::atproto::repo::strong_ref;
-use color_eyre::Result;
-use crossterm::event::KeyEvent;
-use ratatui::layout::{Constraint, Layout, Margin, Rect};
-use ratatui::style::{Color, Style, Stylize};
-use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Clear, List, ListState, Padding};
-use ratatui::Frame;
-use tokio::sync::mpsc::UnboundedSender;
+use {
+    super::{
+        super::views::types::Action as ViewsAction,
+        embed_images::EmbedImagesModalComponent,
+        embed_record::EmbedRecordModalComponent,
+        types::{Data, EmbedData, ImageData},
+        {Action, ModalComponent},
+    },
+    bsky_sdk::api::com::atproto::repo::strong_ref,
+    color_eyre::Result,
+    crossterm::event::KeyEvent,
+    ratatui::{
+        layout::{Constraint, Layout, Margin, Rect},
+        style::{Color, Style, Stylize},
+        text::{Line, Text},
+        widgets::{Block, BorderType, Clear, List, ListState, Padding},
+        Frame,
+    },
+    tokio::sync::mpsc::UnboundedSender,
+};
 
 pub struct EmbedModalComponent {
     action_tx: UnboundedSender<ViewsAction>,
@@ -31,8 +37,8 @@ impl EmbedModalComponent {
         };
         Self {
             action_tx,
-            embeds_state: Default::default(),
-            actions_state: Default::default(),
+            embeds_state: ListState::default(),
+            actions_state: ListState::default(),
             record,
             images,
             child: None,
@@ -57,7 +63,7 @@ impl ModalComponent for EmbedModalComponent {
                             if let Some(i) = index {
                                 self.images[i] = image;
                             } else {
-                                self.images.push(image)
+                                self.images.push(image);
                             }
                         }
                         Data::Record(strong_ref) => {

@@ -1,24 +1,33 @@
-use super::types::{Action, Data, Transition, View};
-use super::utils::{counts, profile_name, profile_name_as_str};
-use super::ViewComponent;
-use crate::backend::types::FeedSourceInfo;
-use crate::backend::{Watch, Watcher};
-use bsky_sdk::api::app::bsky::feed::defs::{
-    FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
+use {
+    super::{
+        types::{Action, Data, Transition, View},
+        utils::{counts, profile_name, profile_name_as_str},
+        ViewComponent,
+    },
+    crate::backend::{
+        types::FeedSourceInfo,
+        {Watch, Watcher},
+    },
+    bsky_sdk::api::{
+        app::bsky::feed::{
+            defs::{FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs},
+            post,
+        },
+        types::{TryFromUnknown, Union},
+    },
+    chrono::Local,
+    color_eyre::Result,
+    ratatui::{
+        layout::{Constraint, Layout, Rect},
+        style::{Color, Style, Stylize},
+        text::{Line, Span, Text},
+        widgets::{Block, Borders, List, ListState, Padding, Paragraph},
+        Frame,
+    },
+    std::sync::Arc,
+    textwrap::Options,
+    tokio::sync::{mpsc::UnboundedSender, oneshot},
 };
-use bsky_sdk::api::app::bsky::feed::post;
-use bsky_sdk::api::types::{TryFromUnknown, Union};
-use chrono::Local;
-use color_eyre::Result;
-use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Style, Stylize};
-use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, Borders, List, ListState, Padding, Paragraph};
-use ratatui::Frame;
-use std::sync::Arc;
-use textwrap::Options;
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::oneshot;
 
 pub struct FeedViewComponent {
     items: Vec<FeedViewPost>,
@@ -45,7 +54,7 @@ impl FeedViewComponent {
             quit: None,
         }
     }
-    fn lines(feed_view_post: &FeedViewPost, area: Rect) -> Option<Vec<Line>> {
+    fn lines(feed_view_post: &FeedViewPost, area: Rect) -> Option<Vec<Line<'_>>> {
         let Ok(record) = post::Record::try_from_unknown(feed_view_post.post.record.clone()) else {
             return None;
         };

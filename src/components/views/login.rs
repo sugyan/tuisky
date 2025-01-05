@@ -1,17 +1,22 @@
-use super::types::{Action, View};
-use super::ViewComponent;
-use bsky_sdk::agent::config::Config;
-use bsky_sdk::BskyAgent;
-use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Style, Stylize};
-use ratatui::text::Line;
-use ratatui::widgets::{Block, Padding, Paragraph, Wrap};
-use ratatui::Frame;
-use std::sync::{Arc, RwLock};
-use tokio::sync::mpsc::UnboundedSender;
-use tui_textarea::TextArea;
+use {
+    super::{
+        types::{Action, View},
+        ViewComponent,
+    },
+    bsky_sdk::{agent::config::Config, BskyAgent},
+    color_eyre::Result,
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    ratatui::{
+        layout::{Constraint, Layout, Rect},
+        style::{Style, Stylize},
+        text::Line,
+        widgets::{Block, Padding, Paragraph, Wrap},
+        Frame,
+    },
+    std::sync::{Arc, RwLock},
+    tokio::sync::mpsc::UnboundedSender,
+    tui_textarea::TextArea,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Focus {
@@ -22,7 +27,7 @@ enum Focus {
 }
 
 impl Focus {
-    fn next(&self) -> Self {
+    fn next(self) -> Self {
         match self {
             Self::Service => Self::Identifier,
             Self::Identifier => Self::Password,
@@ -30,7 +35,7 @@ impl Focus {
             Self::Submit => Self::Service,
         }
     }
-    fn prev(&self) -> Self {
+    fn prev(self) -> Self {
         match self {
             Self::Service => Self::Submit,
             Self::Identifier => Self::Service,

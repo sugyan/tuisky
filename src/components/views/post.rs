@@ -1,34 +1,53 @@
-use super::types::{Action, Data, Transition, View};
-use super::utils::{counts, profile_name, profile_name_as_str};
-use super::ViewComponent;
-use crate::backend::{Watch, Watcher};
-use bsky_sdk::api::agent::Session;
-use bsky_sdk::api::app::bsky::actor::defs::ProfileViewBasic;
-use bsky_sdk::api::app::bsky::embed::record::{self, ViewRecordRefs};
-use bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs;
-use bsky_sdk::api::app::bsky::embed::{external, images};
-use bsky_sdk::api::app::bsky::feed::defs::{
-    PostView, PostViewData, PostViewEmbedRefs, ThreadViewPostParentRefs, ViewerStateData,
+use {
+    super::{
+        types::{Action, Data, Transition, View},
+        utils::{counts, profile_name, profile_name_as_str},
+        ViewComponent,
+    },
+    crate::backend::{Watch, Watcher},
+    bsky_sdk::{
+        api::{
+            agent::Session,
+            app::bsky::{
+                actor::defs::ProfileViewBasic,
+                embed::{
+                    record::{self, ViewRecordRefs},
+                    record_with_media::ViewMediaRefs,
+                    {external, images},
+                },
+                feed::{
+                    defs::{
+                        PostView, PostViewData, PostViewEmbedRefs, ThreadViewPostParentRefs,
+                        ViewerStateData,
+                    },
+                    get_post_thread::OutputThreadRefs,
+                    post,
+                },
+                richtext::facet::MainFeaturesItem,
+            },
+            types::{
+                string::Datetime,
+                {TryFromUnknown, Union},
+            },
+        },
+        {api, BskyAgent},
+    },
+    chrono::Local,
+    color_eyre::Result,
+    indexmap::IndexSet,
+    ratatui::{
+        layout::{Alignment, Constraint, Layout, Margin, Rect},
+        style::{Color, Style, Stylize},
+        text::{Line, Span, Text},
+        widgets::{
+            Block, Borders, Cell, List, ListItem, ListState, Padding, Paragraph, Row, Table,
+            TableState,
+        },
+        Frame,
+    },
+    std::sync::Arc,
+    tokio::sync::{mpsc::UnboundedSender, oneshot},
 };
-use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
-use bsky_sdk::api::app::bsky::feed::post;
-use bsky_sdk::api::app::bsky::richtext::facet::MainFeaturesItem;
-use bsky_sdk::api::types::string::Datetime;
-use bsky_sdk::api::types::{TryFromUnknown, Union};
-use bsky_sdk::{api, BskyAgent};
-use chrono::Local;
-use color_eyre::Result;
-use indexmap::IndexSet;
-use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
-use ratatui::style::{Color, Style, Stylize};
-use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{
-    Block, Borders, Cell, List, ListItem, ListState, Padding, Paragraph, Row, Table, TableState,
-};
-use ratatui::Frame;
-use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::oneshot;
 
 #[derive(Debug, Clone)]
 enum PostAction {
@@ -203,7 +222,7 @@ impl PostViewComponent {
         }
         actions
     }
-    fn post_view_rows(post_view: &PostView, width: u16) -> Option<Vec<Row>> {
+    fn post_view_rows(post_view: &PostView, width: u16) -> Option<Vec<Row<'_>>> {
         let Ok(record) = post::Record::try_from_unknown(post_view.record.clone()) else {
             return None;
         };
@@ -325,7 +344,7 @@ impl PostViewComponent {
             match embed {
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
                     lines.push(Line::from("images").yellow());
-                    lines.extend(Self::images_lines(images))
+                    lines.extend(Self::images_lines(images));
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(external)) => {
                     lines.push(Line::from("external").yellow());
@@ -341,7 +360,7 @@ impl PostViewComponent {
                     lines.push(Line::from("recordWithMedia").yellow());
                     match &record_with_media.media {
                         Union::Refs(ViewMediaRefs::AppBskyEmbedImagesView(images)) => {
-                            lines.extend(Self::images_lines(images))
+                            lines.extend(Self::images_lines(images));
                         }
                         Union::Refs(ViewMediaRefs::AppBskyEmbedExternalView(external)) => {
                             lines.extend(Self::external_lines(external));
@@ -355,11 +374,11 @@ impl PostViewComponent {
             rows.push(Row::default().height(lines.len() as u16).cells(vec![
                 Cell::from("Embed:".gray().into_right_aligned_line()),
                 Cell::from(lines),
-            ]))
+            ]));
         }
         Some(rows)
     }
-    fn images_lines(images: &images::View) -> Vec<Line> {
+    fn images_lines(images: &images::View) -> Vec<Line<'_>> {
         images
             .images
             .iter()
@@ -372,7 +391,7 @@ impl PostViewComponent {
             })
             .collect()
     }
-    fn external_lines(external: &external::View) -> Vec<Line> {
+    fn external_lines(external: &external::View) -> Vec<Line<'_>> {
         vec![
             Line::from(
                 Span::from(external.external.uri.as_str())
@@ -383,7 +402,7 @@ impl PostViewComponent {
             Line::from(external.external.description.as_str()),
         ]
     }
-    fn record_lines(record: &record::View, width: u16) -> Vec<Line> {
+    fn record_lines(record: &record::View, width: u16) -> Vec<Line<'_>> {
         match &record.record {
             Union::Refs(ViewRecordRefs::ViewRecord(view_record)) => {
                 if let Ok(record) = post::Record::try_from_unknown(view_record.value.clone()) {
@@ -615,18 +634,13 @@ impl ViewComponent for PostViewComponent {
                         }
                     }
                     Data::ViewerState(viewer) => {
-                        let diff = i64::from(
-                            viewer
-                                .as_ref()
-                                .map(|v| v.like.is_some())
-                                .unwrap_or_default(),
-                        ) - i64::from(
-                            self.post_view
-                                .viewer
-                                .as_ref()
-                                .map(|v| v.like.is_some())
-                                .unwrap_or_default(),
-                        );
+                        let diff = i64::from(viewer.as_ref().map_or(false, |v| v.like.is_some()))
+                            - i64::from(
+                                self.post_view
+                                    .viewer
+                                    .as_ref()
+                                    .map_or(false, |v| v.like.is_some()),
+                            );
                         self.post_view.like_count =
                             Some(self.post_view.like_count.unwrap_or_default() + diff);
                         self.post_view.viewer.clone_from(viewer);

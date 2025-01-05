@@ -3,13 +3,19 @@ pub mod main;
 pub mod modals;
 pub mod views;
 
-use crate::config::Config;
-use crate::types::{Action, Event};
-use color_eyre::eyre::Result;
-use crossterm::event::{KeyEvent, MouseEvent};
-use ratatui::layout::{Rect, Size};
-use ratatui::Frame;
-use tokio::sync::mpsc::UnboundedSender;
+use {
+    crate::{
+        config::Config,
+        types::{Action, Event},
+    },
+    color_eyre::eyre::Result,
+    crossterm::event::{KeyEvent, MouseEvent},
+    ratatui::{
+        layout::{Rect, Size},
+        Frame,
+    },
+    tokio::sync::mpsc::UnboundedSender,
+};
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 /// Implementors of this trait can be registered with the main application loop and will be able to receive events,
