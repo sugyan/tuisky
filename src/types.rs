@@ -9,6 +9,10 @@ pub type IdType = u32;
 pub enum Action {
     Error(String),
     Quit,
+    #[cfg(not(windows))]
+    Suspend,
+    #[cfg(not(windows))]
+    Resume,
     Tick(usize),
     Render,
     NextFocus,
@@ -28,6 +32,10 @@ impl Debug for Action {
             Self::PrevFocus => write!(f, "PrevFocus"),
             Self::View(arg) => f.debug_tuple("View").field(arg).finish(),
             Self::Login((arg, _)) => f.debug_tuple("Login").field(arg).finish(),
+            #[cfg(not(windows))]
+            Self::Suspend => write!(f, "Suspend"),
+            #[cfg(not(windows))]
+            Self::Resume => write!(f, "Resume"),
         }
     }
 }

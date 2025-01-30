@@ -38,6 +38,9 @@ tokio = { version = "1.38.0", features = [
 toml = "0.8.14"
 tui-textarea = "0.7.0"
 
+[target.'cfg(not(windows))'.dependencies]
+signal-hook = "0.3.17"
+
 [dev-dependencies]
 ipld-core = "0.4.0"
 

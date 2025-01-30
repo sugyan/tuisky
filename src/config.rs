@@ -26,6 +26,12 @@ impl Config {
             .global
             .entry(Key(KeyCode::Char('o'), KeyModifiers::CONTROL))
             .or_insert(GlobalAction::NextFocus);
+        // global: Ctrl-z to Suspend
+        #[cfg(not(windows))]
+        self.keybindings
+            .global
+            .entry(Key(KeyCode::Char('z'), KeyModifiers::CONTROL))
+            .or_insert(GlobalAction::Suspend);
         // column: Down to NextItem
         self.keybindings
             .column
@@ -161,6 +167,8 @@ pub enum GlobalAction {
     NextFocus,
     PrevFocus,
     Quit,
+    #[cfg(not(windows))]
+    Suspend,
 }
 
 impl From<&GlobalAction> for AppAction {
@@ -169,6 +177,8 @@ impl From<&GlobalAction> for AppAction {
             GlobalAction::NextFocus => Self::NextFocus,
             GlobalAction::PrevFocus => Self::PrevFocus,
             GlobalAction::Quit => Self::Quit,
+            #[cfg(not(windows))]
+            GlobalAction::Suspend => Self::Suspend,
         }
     }
 }

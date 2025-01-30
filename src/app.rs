@@ -53,6 +53,8 @@ impl App {
 
         // Main loop
         let mut should_quit = false;
+        #[cfg(not(windows))]
+        let mut should_suspend = false;
         loop {
             if let Some(e) = tui.next_event().await {
                 if let Some(action) = self.handle_events(e.clone()) {
@@ -73,6 +75,13 @@ impl App {
                 }
                 match action {
                     Action::Quit => should_quit = true,
+                    #[cfg(not(windows))]
+                    Action::Suspend => should_suspend = true,
+                    #[cfg(not(windows))]
+                    Action::Resume => {
+                        should_suspend = false;
+                        tui.clear()?;
+                    }
                     Action::Tick(i) => {
                         // TODO
                         if i % 60 == 0 {
@@ -107,6 +116,13 @@ impl App {
                         }
                     }
                 }
+            }
+            #[cfg(not(windows))]
+            if should_suspend {
+                tui.suspend()?;
+                action_tx.send(Action::Resume)?;
+                action_tx.send(Action::Render)?;
+                tui.start()?;
             }
             if should_quit {
                 break main_component.save().await?;
