@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/sugyan/tuisky/compare/v0.1.6...v0.2.0) - 2025-01-31
+
+### Other
+
+- added support for suspend on non-windows ([#51](https://github.com/sugyan/tuisky/pull/51))
+
 ## [0.1.6](https://github.com/sugyan/tuisky/compare/v0.1.5...v0.1.6) - 2025-01-31
 
 ### Fixed
