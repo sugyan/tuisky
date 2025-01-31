@@ -1,6 +1,6 @@
 use crate::types::Event;
 use color_eyre::Result;
-use crossterm::event::{Event as CrosstermEvent, EventStream};
+use crossterm::event::{Event as CrosstermEvent, EventStream, KeyEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{cursor, execute};
@@ -80,7 +80,7 @@ where
                 CrosstermEvent::Mouse(mouse) => {
                     tx.send(Event::Mouse(mouse)).unwrap();
                 }
-                CrosstermEvent::Key(key) => {
+                CrosstermEvent::Key(key) if key.kind != KeyEventKind::Release => {
                     tx.send(Event::Key(key)).unwrap();
                 }
                 _ => {
