@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6](https://github.com/sugyan/tuisky/compare/v0.1.5...v0.1.6) - 2025-01-31
+
+### Fixed
+
+- fix [#49](https://github.com/sugyan/tuisky/pull/49) ([#52](https://github.com/sugyan/tuisky/pull/52))
+
 ## [0.1.5](https://github.com/sugyan/tuisky/compare/v0.1.4...v0.1.5) - 2024-11-14
 
 ### Fixed
