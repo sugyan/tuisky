@@ -80,10 +80,7 @@ where
                 CrosstermEvent::Mouse(mouse) => {
                     tx.send(Event::Mouse(mouse)).unwrap();
                 }
-                CrosstermEvent::Key(key) => {
-                    if key.kind == KeyEventKind::Release {
-                        return;
-                    }
+                CrosstermEvent::Key(key) if key.kind != KeyEventKind::Release => {
                     tx.send(Event::Key(key)).unwrap();
                 }
                 _ => {
