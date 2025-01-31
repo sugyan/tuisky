@@ -11,6 +11,7 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Clear, List, ListState, Padding};
 use ratatui::Frame;
+use ratatui_image::picker::Picker;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub struct EmbedModalComponent {
@@ -20,10 +21,15 @@ pub struct EmbedModalComponent {
     record: Option<strong_ref::Main>,
     images: Vec<ImageData>,
     child: Option<Box<dyn ModalComponent>>,
+    protocol_picker: Picker,
 }
 
 impl EmbedModalComponent {
-    pub fn new(action_tx: UnboundedSender<ViewsAction>, init: Option<EmbedData>) -> Self {
+    pub fn new(
+        action_tx: UnboundedSender<ViewsAction>,
+        init: Option<EmbedData>,
+        protocol_picker: Picker,
+    ) -> Self {
         let (record, images) = if let Some(data) = init {
             (data.record, data.images)
         } else {
@@ -36,6 +42,7 @@ impl EmbedModalComponent {
             record,
             images,
             child: None,
+            protocol_picker,
         }
     }
 }
@@ -140,16 +147,19 @@ impl ModalComponent for EmbedModalComponent {
                     }
                     Some(i) => {
                         let i = i - usize::from(self.record.is_some());
-                        self.child = Some(Box::new(EmbedImagesModalComponent::new(Some((
-                            i,
-                            self.images[i].clone(),
-                        )))));
+                        self.child = Some(Box::new(EmbedImagesModalComponent::new(
+                            Some((i, self.images[i].clone())),
+                            self.protocol_picker.clone(),
+                        )));
                     }
                     None => {}
                 }
                 match self.actions_state.selected() {
                     Some(0) if self.images.len() < 4 => {
-                        self.child = Some(Box::new(EmbedImagesModalComponent::new(None)));
+                        self.child = Some(Box::new(EmbedImagesModalComponent::new(
+                            None,
+                            self.protocol_picker.clone(),
+                        )));
                     }
                     Some(1) => {
                         // TODO: Add external

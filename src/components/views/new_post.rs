@@ -18,6 +18,7 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Padding};
 use ratatui::{layout::Rect, widgets::Paragraph, Frame};
+use ratatui_image::picker::Picker;
 use std::fs::File;
 use std::io::{BufReader, Cursor, Read};
 use std::num::NonZeroU64;
@@ -64,10 +65,15 @@ pub struct NewPostViewComponent {
     focus: Focus,
     text_len: usize,
     modals: Option<Box<dyn ModalComponent>>,
+    protocol_picker: Picker,
 }
 
 impl NewPostViewComponent {
-    pub fn new(action_tx: UnboundedSender<Action>, agent: Arc<BskyAgent>) -> Self {
+    pub fn new(
+        action_tx: UnboundedSender<Action>,
+        agent: Arc<BskyAgent>,
+        protocol_picker: Picker,
+    ) -> Self {
         let mut text = TextArea::default();
         text.set_block(Block::bordered().title("Text"));
         text.set_cursor_line_style(Style::default());
@@ -84,6 +90,7 @@ impl NewPostViewComponent {
             focus: Focus::Text,
             text_len: 0,
             modals: None,
+            protocol_picker,
         }
     }
     fn current_textarea(&mut self) -> Option<&mut TextArea<'static>> {
@@ -333,6 +340,7 @@ impl ViewComponent for NewPostViewComponent {
                 self.modals = Some(Box::new(EmbedModalComponent::new(
                     self.action_tx.clone(),
                     self.embed.clone(),
+                    self.protocol_picker.clone(),
                 )));
                 Ok(Some(Action::Render))
             }

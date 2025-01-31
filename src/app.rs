@@ -7,6 +7,7 @@ use color_eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui_image::picker::Picker;
 use tokio::sync::mpsc;
 
 pub struct App {
@@ -31,8 +32,12 @@ impl App {
         let mut tui = Tui::new(terminal);
         tui.start()?;
 
+        // Setup graphics protocol picker
+        let protocol_picker = Picker::from_query_stdio()?;
+
         // Create main component
-        let mut main_component = MainComponent::new(self.config.clone(), action_tx.clone());
+        let mut main_component =
+            MainComponent::new(self.config.clone(), action_tx.clone(), protocol_picker);
 
         // Setup components
         main_component.register_action_handler(action_tx.clone())?;
