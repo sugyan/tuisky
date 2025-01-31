@@ -2018,6 +2018,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "signal-hook",
  "textwrap",
  "tokio",
  "toml",

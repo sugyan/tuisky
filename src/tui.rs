@@ -64,6 +64,17 @@ where
         }));
         Ok(())
     }
+    #[cfg(not(windows))]
+    pub fn suspend(&mut self) -> Result<()> {
+        restore()?;
+        signal_hook::low_level::raise(signal_hook::consts::signal::SIGTSTP)?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    pub fn clear(&mut self) -> Result<()> {
+        self.terminal.clear()?;
+        Ok(())
+    }
     pub fn end(&mut self) -> Result<()> {
         restore()?;
         Ok(())
