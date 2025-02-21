@@ -10,6 +10,7 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect, Size};
 use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Block, BorderType};
 use ratatui::Frame;
+use ratatui_image::picker::Picker;
 use serde::{Deserialize, Serialize};
 use std::fs::{create_dir_all, File};
 use std::path::PathBuf;
@@ -35,15 +36,21 @@ pub struct MainComponent {
     action_tx: UnboundedSender<Action>,
     columns: Vec<ColumnComponent>,
     state: State,
+    protocol_picker: Picker,
 }
 
 impl MainComponent {
-    pub fn new(config: Config, action_tx: UnboundedSender<Action>) -> Self {
+    pub fn new(
+        config: Config,
+        action_tx: UnboundedSender<Action>,
+        protocol_picker: Picker,
+    ) -> Self {
         Self {
             config,
             action_tx,
             columns: Vec::new(),
             state: State { selected: None },
+            protocol_picker,
         }
     }
     pub async fn save(&self) -> Result<()> {
@@ -92,7 +99,11 @@ impl Component for MainComponent {
             .map_or(auto_num, |n| n.min(auto_num));
 
         for i in 0..num_columns {
-            let mut column = ColumnComponent::new(self.config.clone(), self.action_tx.clone());
+            let mut column = ColumnComponent::new(
+                self.config.clone(),
+                self.action_tx.clone(),
+                self.protocol_picker.clone(),
+            );
             if let Some(config) = appdata.views.get(i).and_then(|view| view.agent.as_ref()) {
                 column.init_with_config(config)?;
             } else {

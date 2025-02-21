@@ -14,6 +14,7 @@ use color_eyre::{eyre, Result};
 use crossterm::event::KeyEvent;
 use ratatui::layout::{Rect, Size};
 use ratatui::Frame;
+use ratatui_image::picker::Picker;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc::{self, UnboundedSender};
@@ -30,10 +31,15 @@ pub struct ColumnComponent {
     action_tx: UnboundedSender<Action>,
     view_tx: UnboundedSender<ViewAction>,
     session: Arc<RwLock<Option<Session>>>,
+    protocol_picker: Picker,
 }
 
 impl ColumnComponent {
-    pub fn new(config: Config, action_tx: UnboundedSender<Action>) -> Self {
+    pub fn new(
+        config: Config,
+        action_tx: UnboundedSender<Action>,
+        protocol_picker: Picker,
+    ) -> Self {
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
         let (view_tx, mut view_rx) = mpsc::unbounded_channel();
         let tx = action_tx.clone();
@@ -63,6 +69,7 @@ impl ColumnComponent {
             action_tx,
             view_tx,
             session: Arc::new(RwLock::new(None)),
+            protocol_picker,
         }
     }
     pub fn init_with_config(&mut self, config: &AgentConfig) -> Result<()> {
@@ -125,6 +132,7 @@ impl ColumnComponent {
             View::NewPost => Box::new(NewPostViewComponent::new(
                 self.view_tx.clone(),
                 watcher.agent.clone(),
+                self.protocol_picker.clone(),
             )),
             View::Feed(info) => Box::new(FeedViewComponent::new(
                 self.view_tx.clone(),
