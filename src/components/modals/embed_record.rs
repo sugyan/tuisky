@@ -3,7 +3,7 @@ use super::types::{Action, Data};
 use super::ModalComponent;
 use bsky_sdk::agent::config::Config;
 use bsky_sdk::api::com::atproto::repo::strong_ref;
-use bsky_sdk::api::types::string::{AtIdentifier, Cid, Nsid};
+use bsky_sdk::api::types::string::{AtIdentifier, Cid, Nsid, RecordKey};
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -98,13 +98,13 @@ impl EmbedRecordModalComponent {
         ) else {
             return Some("missing authority, collection, or rkey");
         };
-        let (Ok(repo), Ok(collection)) = (
+        let (Ok(repo), Ok(collection), Ok(rkey)) = (
             authority.as_str().parse::<AtIdentifier>(),
             collection.as_str().parse::<Nsid>(),
+            rkey.as_str().parse::<RecordKey>(),
         ) else {
             return Some("invalid authority or collection");
         };
-        let rkey = rkey.as_str().to_string();
         let action_tx = self.action_tx.clone();
         let state = self.state.clone();
         tokio::spawn(async move {
@@ -133,7 +133,7 @@ impl EmbedRecordModalComponent {
             }
         }
     }
-    async fn try_get_record(collection: Nsid, repo: AtIdentifier, rkey: String) -> Result<Cid> {
+    async fn try_get_record(collection: Nsid, repo: AtIdentifier, rkey: RecordKey) -> Result<Cid> {
         let agent = BskyAgent::builder()
             .config(Config {
                 endpoint: PUBLIC_API_ENDPOINT.to_string(),

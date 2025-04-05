@@ -12,7 +12,7 @@ keywords = ["tui", "atproto", "bluesky", "atrium"]
 exclude = ["/config"]
 
 [dependencies]
-bsky-sdk = "0.1.12"
+bsky-sdk = "0.1.18"
 chrono = { version = "0.4.38", default-features = false }
 clap = { version = "4.5.8", features = ["derive"] }
 color-eyre = "0.6.3"

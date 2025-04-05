@@ -8,7 +8,7 @@ use crate::backend::Watcher;
 use crate::config::Config;
 use crate::types::{Action, IdType};
 use bsky_sdk::agent::config::Config as AgentConfig;
-use bsky_sdk::api::agent::Session;
+use bsky_sdk::api::agent::atp_agent::AtpSession;
 use bsky_sdk::BskyAgent;
 use color_eyre::{eyre, Result};
 use crossterm::event::KeyEvent;
@@ -29,7 +29,7 @@ pub struct ColumnComponent {
     config: Config,
     action_tx: UnboundedSender<Action>,
     view_tx: UnboundedSender<ViewAction>,
-    session: Arc<RwLock<Option<Session>>>,
+    session: Arc<RwLock<Option<AtpSession>>>,
 }
 
 impl ColumnComponent {

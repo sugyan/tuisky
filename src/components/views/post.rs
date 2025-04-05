@@ -2,7 +2,7 @@ use super::types::{Action, Data, Transition, View};
 use super::utils::{counts, profile_name, profile_name_as_str};
 use super::ViewComponent;
 use crate::backend::{Watch, Watcher};
-use bsky_sdk::api::agent::Session;
+use bsky_sdk::api::agent::atp_agent::AtpSession;
 use bsky_sdk::api::app::bsky::actor::defs::ProfileViewBasic;
 use bsky_sdk::api::app::bsky::embed::record::{self, ViewRecordRefs};
 use bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs;
@@ -77,7 +77,7 @@ pub struct PostViewComponent {
     agent: Arc<BskyAgent>,
     watcher: Box<dyn Watch<Output = Union<OutputThreadRefs>>>,
     quit: Option<oneshot::Sender<()>>,
-    session: Option<Session>,
+    session: Option<AtpSession>,
 }
 
 impl PostViewComponent {
@@ -86,7 +86,7 @@ impl PostViewComponent {
         watcher: Arc<Watcher>,
         post_view: PostView,
         reply: Option<PostView>,
-        session: Option<Session>,
+        session: Option<AtpSession>,
     ) -> Self {
         let actions = Self::post_view_actions(&post_view, &session);
         let agent = watcher.agent.clone();
@@ -104,7 +104,7 @@ impl PostViewComponent {
             session,
         }
     }
-    fn post_view_actions(post_view: &PostView, session: &Option<Session>) -> Vec<PostAction> {
+    fn post_view_actions(post_view: &PostView, session: &Option<AtpSession>) -> Vec<PostAction> {
         let mut liked = None;
         if let Some(viewer) = &post_view.viewer {
             liked = viewer.like.as_ref();
