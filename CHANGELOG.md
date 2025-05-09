@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2](https://github.com/sugyan/tuisky/compare/v0.2.1...v0.2.2) - 2025-05-09
+
+### Other
+
+- Added x install Support for tuisky
+- Update relase-plz action
+
 ## [0.2.1](https://github.com/sugyan/tuisky/compare/v0.2.0...v0.2.1) - 2025-04-05
 
 ### Fixed
