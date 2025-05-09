@@ -34,6 +34,14 @@ You can install `tuisky` from the [AUR](https://aur.archlinux.org/packages/tuisk
 paru -S tuisky
 ```
 
+### X-CMD
+
+If you are a user of [x-cmd](https://x-cmd.com), you can run:
+
+```
+x install tuisky
+```
+
 ## Usage
 
 ```
