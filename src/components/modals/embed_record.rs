@@ -195,13 +195,13 @@ impl ModalComponent for EmbedRecordModalComponent {
                     let uri = self.input.lines().join("");
                     let mut state = self.state.lock().unwrap();
                     if let State::Ok(cid) = state.deref() {
-                        Some(Action::Ok(Data::Record(
+                        Some(Action::Ok(Box::new(Data::Record(
                             strong_ref::MainData {
                                 cid: cid.clone(),
                                 uri,
                             }
                             .into(),
-                        )))
+                        ))))
                     } else {
                         self.focus = Focus::None;
                         if let Some(err) = self.get_record(&uri) {

@@ -1,14 +1,14 @@
 use super::super::modals::types::{Action as ModalAction, Data, EmbedData};
 use super::super::modals::{EmbedModalComponent, ModalComponent};
-use super::types::{Action, Transition, View};
 use super::ViewComponent;
+use super::types::{Action, Transition, View};
+use bsky_sdk::BskyAgent;
 use bsky_sdk::api::app::bsky::embed::{self, record_with_media};
 use bsky_sdk::api::app::bsky::feed::post::{RecordData, RecordEmbedRefs};
 use bsky_sdk::api::com::atproto::repo::{create_record, strong_ref};
-use bsky_sdk::api::types::string::{Datetime, Language};
 use bsky_sdk::api::types::Union;
+use bsky_sdk::api::types::string::{Datetime, Language};
 use bsky_sdk::rich_text::RichText;
-use bsky_sdk::BskyAgent;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use futures_util::future;
@@ -17,7 +17,7 @@ use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Padding};
-use ratatui::{layout::Rect, widgets::Paragraph, Frame};
+use ratatui::{Frame, layout::Rect, widgets::Paragraph};
 use std::fs::File;
 use std::io::{BufReader, Cursor, Read};
 use std::num::NonZeroU64;
@@ -303,14 +303,18 @@ impl ViewComponent for NewPostViewComponent {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         if let Some(modal) = self.modals.as_mut() {
             return Ok(match modal.update(action)? {
-                Some(ModalAction::Ok(Data::Embed(embed))) => {
-                    self.embed = if embed != EmbedData::default() {
-                        Some(embed)
+                Some(ModalAction::Ok(data)) => {
+                    if let Data::Embed(embed) = *data {
+                        self.embed = if embed != EmbedData::default() {
+                            Some(embed)
+                        } else {
+                            None
+                        };
+                        self.modals = None;
+                        Some(Action::Render)
                     } else {
                         None
-                    };
-                    self.modals = None;
-                    Some(Action::Render)
+                    }
                 }
                 Some(ModalAction::Cancel) => {
                     self.modals = None;

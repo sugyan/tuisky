@@ -6,11 +6,11 @@ use super::{Action, ModalComponent};
 use bsky_sdk::api::com::atproto::repo::strong_ref;
 use color_eyre::Result;
 use crossterm::event::KeyEvent;
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Clear, List, ListState, Padding};
-use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub struct EmbedModalComponent {
@@ -52,7 +52,7 @@ impl ModalComponent for EmbedModalComponent {
         if let Some(child) = self.child.as_mut() {
             return Ok(match child.update(action)? {
                 Some(Action::Ok(data)) => {
-                    match data {
+                    match *data {
                         Data::Image((image, index)) => {
                             if let Some(i) = index {
                                 self.images[i] = image;
@@ -161,10 +161,10 @@ impl ModalComponent for EmbedModalComponent {
                         )));
                     }
                     Some(3) => {
-                        return Ok(Some(Action::Ok(Data::Embed(EmbedData {
+                        return Ok(Some(Action::Ok(Box::new(Data::Embed(EmbedData {
                             images: self.images.clone(),
                             record: self.record.clone(),
-                        }))));
+                        })))));
                     }
                     _ => {}
                 }

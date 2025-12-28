@@ -21,7 +21,7 @@ pub enum Data {
 
 #[derive(Clone)]
 pub enum Action {
-    Ok(Data),
+    Ok(Box<Data>),
     Delete(Option<usize>),
     Cancel,
     Render,
