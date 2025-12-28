@@ -32,14 +32,14 @@ use tokio::sync::oneshot;
 
 #[derive(Debug, Clone)]
 enum PostAction {
-    Profile(ProfileViewBasic),
+    Profile(Box<ProfileViewBasic>),
     Reply,
     Repost,
     Like,
     Unlike(String),
     Delete,
     Open(String),
-    ViewRecord(record::ViewRecord),
+    ViewRecord(Box<record::ViewRecord>),
 }
 
 impl<'a> From<&'a PostAction> for ListItem<'a> {
@@ -47,7 +47,7 @@ impl<'a> From<&'a PostAction> for ListItem<'a> {
         match action {
             PostAction::Profile(profile) => Self::from(Line::from(vec![
                 Span::from("Show "),
-                Span::from(profile_name_as_str(profile)).bold(),
+                Span::from(profile_name_as_str(profile.as_ref())).bold(),
                 Span::from("'s profile"),
             ]))
             .dim(),
@@ -110,7 +110,7 @@ impl PostViewComponent {
             liked = viewer.like.as_ref();
         }
         let mut actions = vec![
-            PostAction::Profile(post_view.author.clone()),
+            PostAction::Profile(Box::new(post_view.author.clone())),
             PostAction::Reply,
             PostAction::Repost,
             if let Some(uri) = liked {
@@ -185,7 +185,7 @@ impl PostViewComponent {
         let mut actions = Vec::new();
         match &record.record {
             Union::Refs(ViewRecordRefs::ViewRecord(view_record)) => {
-                actions.push(PostAction::ViewRecord(view_record.as_ref().clone()));
+                actions.push(PostAction::ViewRecord(view_record.clone()));
             }
             Union::Refs(ViewRecordRefs::AppBskyFeedDefsGeneratorView(_)) => {
                 // TODO
