@@ -5,7 +5,7 @@ use tokio::sync::{broadcast, watch};
 use tokio::time;
 
 impl Watcher {
-    pub fn preferences(&self) -> impl Watch<Output = Preferences> {
+    pub fn preferences(&self) -> impl Watch<Output = Preferences> + use<> {
         let (tx, _) = broadcast::channel(1);
         PreferencesWatcher {
             agent: self.agent.clone(),

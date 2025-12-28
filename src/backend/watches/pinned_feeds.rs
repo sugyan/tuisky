@@ -10,7 +10,7 @@ use tokio::sync::watch::Sender;
 use tokio::sync::{broadcast, watch};
 
 impl Watcher {
-    pub fn pinned_feeds(&self) -> impl Watch<Output = Vec<PinnedFeed>> {
+    pub fn pinned_feeds(&self) -> impl Watch<Output = Vec<PinnedFeed>> + use<> {
         let (tx, _) = broadcast::channel(1);
         PinnedFeedsWatcher {
             agent: self.agent.clone(),

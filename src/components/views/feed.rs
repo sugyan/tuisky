@@ -1,6 +1,6 @@
+use super::ViewComponent;
 use super::types::{Action, Data, Transition, View};
 use super::utils::{counts, profile_name, profile_name_as_str};
-use super::ViewComponent;
 use crate::backend::types::FeedSourceInfo;
 use crate::backend::{Watch, Watcher};
 use bsky_sdk::api::app::bsky::feed::defs::{
@@ -10,11 +10,11 @@ use bsky_sdk::api::app::bsky::feed::post;
 use bsky_sdk::api::types::{TryFromUnknown, Union};
 use chrono::Local;
 use color_eyre::Result;
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, List, ListState, Padding, Paragraph};
-use ratatui::Frame;
 use std::sync::Arc;
 use textwrap::Options;
 use tokio::sync::mpsc::UnboundedSender;
@@ -45,7 +45,7 @@ impl FeedViewComponent {
             quit: None,
         }
     }
-    fn lines(feed_view_post: &FeedViewPost, area: Rect) -> Option<Vec<Line>> {
+    fn lines(feed_view_post: &FeedViewPost, area: Rect) -> Option<Vec<Line<'_>>> {
         let Ok(record) = post::Record::try_from_unknown(feed_view_post.post.record.clone()) else {
             return None;
         };

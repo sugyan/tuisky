@@ -16,7 +16,7 @@ use tokio::sync::{broadcast, watch, Mutex};
 use tokio::time;
 
 impl Watcher {
-    pub fn feed(&self, feed_info: FeedSourceInfo) -> impl Watch<Output = Vec<FeedViewPost>> {
+    pub fn feed(&self, feed_info: FeedSourceInfo) -> impl Watch<Output = Vec<FeedViewPost>> + use<> {
         let (tx, _) = broadcast::channel(1);
         FeedWatcher {
             feed_info,

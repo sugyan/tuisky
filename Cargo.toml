@@ -2,8 +2,8 @@
 name = "tuisky"
 version = "0.2.1"
 authors = ["sugyan <sugi1982+github@gmail.com>"]
-edition = "2021"
-rust-version = "1.80"
+edition = "2024"
+rust-version = "1.85"
 description = "TUI client for Bluesky"
 readme = "README.md"
 repository = "https://github.com/sugyan/tuisky"
@@ -12,7 +12,7 @@ keywords = ["tui", "atproto", "bluesky", "atrium"]
 exclude = ["/config"]
 
 [dependencies]
-bsky-sdk = "0.1.18"
+bsky-sdk = "0.1.23"
 chrono = { version = "0.4.38", default-features = false }
 clap = { version = "4.5.8", features = ["derive"] }
 color-eyre = "0.6.3"

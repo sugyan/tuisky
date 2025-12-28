@@ -1,6 +1,6 @@
+use super::ViewComponent;
 use super::types::{Action, Data, Transition, View};
 use super::utils::{counts, profile_name, profile_name_as_str};
-use super::ViewComponent;
 use crate::backend::{Watch, Watcher};
 use bsky_sdk::api::agent::atp_agent::AtpSession;
 use bsky_sdk::api::app::bsky::actor::defs::ProfileViewBasic;
@@ -15,17 +15,17 @@ use bsky_sdk::api::app::bsky::feed::post;
 use bsky_sdk::api::app::bsky::richtext::facet::MainFeaturesItem;
 use bsky_sdk::api::types::string::Datetime;
 use bsky_sdk::api::types::{TryFromUnknown, Union};
-use bsky_sdk::{api, BskyAgent};
+use bsky_sdk::{BskyAgent, api};
 use chrono::Local;
 use color_eyre::Result;
 use indexmap::IndexSet;
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
     Block, Borders, Cell, List, ListItem, ListState, Padding, Paragraph, Row, Table, TableState,
 };
-use ratatui::Frame;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
@@ -203,7 +203,7 @@ impl PostViewComponent {
         }
         actions
     }
-    fn post_view_rows(post_view: &PostView, width: u16) -> Option<Vec<Row>> {
+    fn post_view_rows(post_view: &PostView, width: u16) -> Option<Vec<Row<'_>>> {
         let Ok(record) = post::Record::try_from_unknown(post_view.record.clone()) else {
             return None;
         };
@@ -359,7 +359,7 @@ impl PostViewComponent {
         }
         Some(rows)
     }
-    fn images_lines(images: &images::View) -> Vec<Line> {
+    fn images_lines(images: &images::View) -> Vec<Line<'_>> {
         images
             .images
             .iter()
@@ -372,7 +372,7 @@ impl PostViewComponent {
             })
             .collect()
     }
-    fn external_lines(external: &external::View) -> Vec<Line> {
+    fn external_lines(external: &external::View) -> Vec<Line<'_>> {
         vec![
             Line::from(
                 Span::from(external.external.uri.as_str())
@@ -383,7 +383,7 @@ impl PostViewComponent {
             Line::from(external.external.description.as_str()),
         ]
     }
-    fn record_lines(record: &record::View, width: u16) -> Vec<Line> {
+    fn record_lines(record: &record::View, width: u16) -> Vec<Line<'_>> {
         match &record.record {
             Union::Refs(ViewRecordRefs::ViewRecord(view_record)) => {
                 if let Ok(record) = post::Record::try_from_unknown(view_record.value.clone()) {
@@ -491,6 +491,7 @@ impl ViewComponent for PostViewComponent {
                             let (agent, tx) = (self.agent.clone(), self.action_tx.clone());
                             let mut viewer = self.post_view.viewer.clone().unwrap_or(
                                 ViewerStateData {
+                                    bookmarked: None,
                                     embedding_disabled: None,
                                     like: None,
                                     pinned: None,
@@ -507,6 +508,7 @@ impl ViewComponent for PostViewComponent {
                                     uri: self.post_view.uri.clone(),
                                 }
                                 .into(),
+                                via: None,
                             };
                             tokio::spawn(async move {
                                 match agent.create_record(record_data).await {
@@ -572,6 +574,7 @@ impl ViewComponent for PostViewComponent {
                                 View::Post(Box::new((
                                     PostViewData {
                                         author: view_record.author.clone(),
+                                        bookmark_count: None,
                                         cid: view_record.cid.clone(),
                                         embed: None,
                                         indexed_at: view_record.indexed_at.clone(),
