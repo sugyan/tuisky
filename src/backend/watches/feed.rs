@@ -1,22 +1,25 @@
 use super::super::types::FeedSourceInfo;
 use super::super::{Watch, Watcher};
+use bsky_sdk::Result;
 use bsky_sdk::api::app::bsky::feed::defs::{
     FeedViewPost, FeedViewPostReasonRefs, PostViewEmbedRefs, ReplyRefParentRefs,
 };
-use bsky_sdk::api::types::string::Cid;
 use bsky_sdk::api::types::Union;
+use bsky_sdk::api::types::string::Cid;
 use bsky_sdk::moderation::decision::DecisionContext;
 use bsky_sdk::preference::{FeedViewPreference, FeedViewPreferenceData};
-use bsky_sdk::Result;
-use bsky_sdk::{preference::Preferences, BskyAgent};
+use bsky_sdk::{BskyAgent, preference::Preferences};
 use indexmap::IndexMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{broadcast, watch, Mutex};
+use tokio::sync::{Mutex, broadcast, watch};
 use tokio::time;
 
 impl Watcher {
-    pub fn feed(&self, feed_info: FeedSourceInfo) -> impl Watch<Output = Vec<FeedViewPost>> + use<> {
+    pub fn feed(
+        &self,
+        feed_info: FeedSourceInfo,
+    ) -> impl Watch<Output = Vec<FeedViewPost>> + use<> {
         let (tx, _) = broadcast::channel(1);
         FeedWatcher {
             feed_info,
@@ -275,7 +278,7 @@ mod tests {
     use super::*;
     use bsky_sdk::api::app::bsky::actor::defs::{ProfileViewBasic, ProfileViewBasicData};
     use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPostData, PostViewData, ReasonRepostData};
-    use bsky_sdk::api::types::{string::Datetime, Unknown};
+    use bsky_sdk::api::types::{Unknown, string::Datetime};
     use std::collections::BTreeMap;
 
     fn feed_view_post(cid: Cid, reason_indexed_at: Option<Datetime>) -> FeedViewPost {
@@ -288,6 +291,9 @@ mod tests {
                 display_name: None,
                 handle: "post.test".parse().expect("invalid handle"),
                 labels: None,
+                pronouns: None,
+                status: None,
+                verification: None,
                 viewer: None,
             }
             .into()
@@ -297,6 +303,7 @@ mod tests {
             feed_context: None,
             post: PostViewData {
                 author: profile_view_basic(),
+                bookmark_count: None,
                 cid,
                 embed: None,
                 indexed_at: Datetime::now(),
@@ -315,12 +322,15 @@ mod tests {
                 Union::Refs(FeedViewPostReasonRefs::ReasonRepost(Box::new(
                     ReasonRepostData {
                         by: profile_view_basic(),
+                        cid: None,
                         indexed_at,
+                        uri: None,
                     }
                     .into(),
                 )))
             }),
             reply: None,
+            req_id: None,
         }
         .into()
     }
