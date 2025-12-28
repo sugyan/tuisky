@@ -10,7 +10,7 @@ use tokio::sync::{broadcast, watch};
 use tokio::time;
 
 impl Watcher {
-    pub fn post_thread(&self, uri: String) -> impl Watch<Output = Union<OutputThreadRefs>> {
+    pub fn post_thread(&self, uri: String) -> impl Watch<Output = Union<OutputThreadRefs>> + use<> {
         let (tx, _) = broadcast::channel(1);
         PostThreadWatcher {
             uri,

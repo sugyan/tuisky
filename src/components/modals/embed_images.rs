@@ -180,13 +180,13 @@ impl ModalComponent for EmbedImagesModalComponent {
             ViewsAction::Enter => match self.focus {
                 Focus::Ok => {
                     if let State::Ok = self.state {
-                        Some(Action::Ok(Data::Image((
+                        Some(Action::Ok(Box::new(Data::Image((
                             ImageData {
                                 path: self.image.path.lines().join(""),
                                 alt: self.image.alt.lines().join("\n"),
                             },
                             self.index,
-                        ))))
+                        )))))
                     } else {
                         None
                     }
