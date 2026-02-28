@@ -11,9 +11,7 @@ use bsky_sdk::preference::{FeedViewPreference, FeedViewPreferenceData};
 use bsky_sdk::{BskyAgent, preference::Preferences};
 use indexmap::IndexMap;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::{Mutex, broadcast, watch};
-use tokio::time;
 
 impl Watcher {
     pub fn feed(
@@ -21,13 +19,15 @@ impl Watcher {
         feed_info: FeedSourceInfo,
     ) -> impl Watch<Output = Vec<FeedViewPost>> + use<> {
         let (tx, _) = broadcast::channel(1);
+        let preferences = self.preferences();
         FeedWatcher {
             feed_info,
             agent: self.agent.clone(),
-            preferences: self.preferences(),
-            period: Duration::from_secs(self.config.intervals.feed),
+            preferences,
             tx,
+            watch_tx: Default::default(),
             current: Default::default(),
+            cursor: Default::default(),
         }
     }
 }
@@ -36,9 +36,10 @@ pub struct FeedWatcher<W> {
     feed_info: FeedSourceInfo,
     agent: Arc<BskyAgent>,
     preferences: W,
-    period: Duration,
     tx: broadcast::Sender<()>,
+    watch_tx: Arc<std::sync::Mutex<Option<watch::Sender<Vec<FeedViewPost>>>>>,
     current: Arc<Mutex<IndexMap<Cid, FeedViewPost>>>,
+    cursor: Arc<Mutex<Option<String>>>,
 }
 
 impl<W> Watch for FeedWatcher<W>
@@ -49,37 +50,31 @@ where
 
     fn subscribe(&self) -> tokio::sync::watch::Receiver<Self::Output> {
         let (tx, rx) = watch::channel(Default::default());
+        {
+            let mut guard = self.watch_tx.lock().unwrap();
+            *guard = Some(tx.clone());
+        }
         let updater = Updater {
             agent: self.agent.clone(),
             current: self.current.clone(),
             feed_info: Arc::new(self.feed_info.clone()),
             tx,
+            cursor: self.cursor.clone(),
         };
         let (mut preferences, mut quit) = (self.preferences.subscribe(), self.tx.subscribe());
-        let mut interval = time::interval(self.period);
         tokio::spawn(async move {
-            // skip the first tick
-            interval.tick().await;
             loop {
-                let tick = interval.tick();
                 tokio::select! {
                     changed = preferences.changed() => {
                         if changed.is_ok() {
                             let preferences = preferences.borrow_and_update().clone();
                             let updater = updater.clone();
                             tokio::spawn(async move {
-                                updater.clone().update(&preferences).await;
+                                updater.clone().update(&preferences, true).await;
                             });
                         } else {
                             break log::warn!("preferences channel closed");
                         }
-                    }
-                    _ = tick => {
-                        let preferences = preferences.borrow().clone();
-                        let updater = updater.clone();
-                        tokio::spawn(async move {
-                            updater.update(&preferences).await;
-                        });
                     }
                     _ = quit.recv() => {
                         break;
@@ -99,6 +94,25 @@ where
     fn refresh(&self) {
         self.preferences.refresh();
     }
+    fn load_more(&self) {
+        let preferences = self.preferences.subscribe();
+        let watch_tx = {
+            let guard = self.watch_tx.lock().unwrap();
+            guard.clone()
+        };
+        let Some(watch_tx) = watch_tx else { return; };
+        let updater = Updater {
+            agent: self.agent.clone(),
+            current: self.current.clone(),
+            feed_info: Arc::new(self.feed_info.clone()),
+            tx: watch_tx,
+            cursor: self.cursor.clone(),
+        };
+        tokio::spawn(async move {
+            let prefs = preferences.borrow().clone();
+            updater.update(&prefs, false).await;
+        });
+    }
 }
 
 #[derive(Clone)]
@@ -107,12 +121,34 @@ struct Updater {
     current: Arc<Mutex<IndexMap<Cid, FeedViewPost>>>,
     feed_info: Arc<FeedSourceInfo>,
     tx: watch::Sender<Vec<FeedViewPost>>,
+    cursor: Arc<Mutex<Option<String>>>,
 }
 
 impl Updater {
-    async fn update(&self, preferences: &Preferences) {
-        match self.calculate_feed(preferences).await {
-            Ok(feed) => {
+    async fn update(&self, preferences: &Preferences, reset: bool) {
+        let cursor = if reset {
+            {
+                let mut c = self.cursor.lock().await;
+                *c = None;
+            }
+            {
+                let mut current = self.current.lock().await;
+                current.clear();
+            }
+            log::info!("update with reset, cursor: None");
+            None
+        } else {
+            let c = self.cursor.lock().await;
+            log::info!("update without reset, cursor: {:?}", c);
+            c.clone()
+        };
+        
+        match self.calculate_feed(preferences, cursor).await {
+            Ok((feed, new_cursor)) => {
+                {
+                    let mut c = self.cursor.lock().await;
+                    *c = new_cursor;
+                }
                 self.tx.send(feed).ok();
             }
             Err(e) => {
@@ -120,11 +156,10 @@ impl Updater {
             }
         }
     }
-    async fn calculate_feed(&self, preferences: &Preferences) -> Result<Vec<FeedViewPost>> {
+    async fn calculate_feed(&self, preferences: &Preferences, cursor: Option<String>) -> Result<(Vec<FeedViewPost>, Option<String>)> {
         // TODO: It should not be necessary to get moderator every time unless moderation_prefs has been changed?
-        let (moderator, feed) = tokio::join!(self.agent.moderator(preferences), self.get_feed());
-        let moderator = moderator?;
-        let mut feed = feed?;
+        let moderator = self.agent.moderator(preferences).await?;
+        let (mut feed, new_cursor) = self.get_feed(cursor).await?;
         feed.reverse();
         let mut ret = {
             let mut feed_map = self.current.lock().await;
@@ -147,48 +182,49 @@ impl Updater {
             };
             ret.retain(|feed_view_post| filter_feed(feed_view_post, &pref));
         }
-        Ok(ret)
+        Ok((ret, new_cursor))
     }
-    async fn get_feed(&self) -> Result<Vec<FeedViewPost>> {
-        Ok(match self.feed_info.as_ref() {
+    async fn get_feed(&self, cursor: Option<String>) -> Result<(Vec<FeedViewPost>, Option<String>)> {
+        match self.feed_info.as_ref() {
             FeedSourceInfo::Feed(generator_view) => {
-                self.agent
+                let response = self
+                    .agent
                     .api
                     .app
                     .bsky
                     .feed
                     .get_feed(
                         bsky_sdk::api::app::bsky::feed::get_feed::ParametersData {
-                            cursor: None,
+                            cursor: cursor.clone(),
                             feed: generator_view.uri.clone(),
                             limit: 30.try_into().ok(),
                         }
                         .into(),
                     )
-                    .await?
-                    .data
-                    .feed
+                    .await?;
+                Ok((response.data.feed, response.data.cursor))
             }
             FeedSourceInfo::List(list_view) => {
-                self.agent
+                let response = self
+                    .agent
                     .api
                     .app
                     .bsky
                     .feed
                     .get_list_feed(
                         bsky_sdk::api::app::bsky::feed::get_list_feed::ParametersData {
-                            cursor: None,
+                            cursor: cursor.clone(),
                             limit: 30.try_into().ok(),
                             list: list_view.uri.clone(),
                         }
                         .into(),
                     )
-                    .await?
-                    .data
-                    .feed
+                    .await?;
+                Ok((response.data.feed, response.data.cursor))
             }
             FeedSourceInfo::Timeline(_) => {
-                self.agent
+                let response = self
+                    .agent
                     .api
                     .app
                     .bsky
@@ -196,16 +232,15 @@ impl Updater {
                     .get_timeline(
                         bsky_sdk::api::app::bsky::feed::get_timeline::ParametersData {
                             algorithm: None,
-                            cursor: None,
+                            cursor: cursor.clone(),
                             limit: 30.try_into().ok(),
                         }
                         .into(),
                     )
-                    .await?
-                    .data
-                    .feed
+                    .await?;
+                Ok((response.data.feed, response.data.cursor))
             }
-        })
+        }
     }
 }
 

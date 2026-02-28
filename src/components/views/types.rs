@@ -15,6 +15,7 @@ pub enum Action {
     Refresh,
     NewPost,
     Menu,
+    Delete,
     Login(Box<BskyAgent>),
     Logout,
     Update(Box<Data>),
@@ -32,6 +33,7 @@ impl Debug for Action {
             Action::Refresh => write!(f, "Refresh"),
             Action::NewPost => write!(f, "NewPost"),
             Action::Menu => write!(f, "Menu"),
+            Action::Delete => write!(f, "Delete"),
             Action::Login(_) => write!(f, "Login"),
             Action::Logout => write!(f, "Logout"),
             Action::Update(_) => write!(f, "Update"),
@@ -56,10 +58,17 @@ pub enum Transition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyContext {
+    pub root: bsky_sdk::api::com::atproto::repo::strong_ref::Main,
+    pub parent: bsky_sdk::api::com::atproto::repo::strong_ref::Main,
+    pub handle: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum View {
     Login,
     Root,
-    NewPost,
+    NewPost(Option<ReplyContext>),
     Feed(Box<FeedSourceInfo>),
     Post(Box<(PostView, Option<PostView>)>),
 }

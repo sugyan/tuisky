@@ -20,12 +20,18 @@ use textwrap::Options;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 
+use bsky_sdk::api::agent::atp_agent::AtpSession;
+use bsky_sdk::BskyAgent;
+
 pub struct FeedViewComponent {
     items: Vec<FeedViewPost>,
     state: ListState,
     action_tx: UnboundedSender<Action>,
     feed_info: FeedSourceInfo,
+    agent: Arc<BskyAgent>,
+    session: Option<AtpSession>,
     watcher: Box<dyn Watch<Output = Vec<FeedViewPost>>>,
+    loading_more: bool,
     quit: Option<oneshot::Sender<()>>,
 }
 
@@ -34,14 +40,19 @@ impl FeedViewComponent {
         action_tx: UnboundedSender<Action>,
         watcher: Arc<Watcher>,
         feed_info: FeedSourceInfo,
+        session: Option<AtpSession>,
     ) -> Self {
+        let agent = watcher.agent.clone();
         let watcher = Box::new(watcher.feed(feed_info.clone()));
         Self {
             items: Vec::new(),
             state: ListState::default(),
             action_tx,
             feed_info,
+            agent,
+            session,
             watcher,
+            loading_more: false,
             quit: None,
         }
     }
@@ -135,6 +146,21 @@ impl ViewComponent for FeedViewComponent {
     fn view(&self) -> View {
         View::Feed(Box::new(self.feed_info.clone()))
     }
+    fn handle_key_events(&mut self, key: crossterm::event::KeyEvent) -> Result<Option<Action>> {
+        if key.modifiers == crossterm::event::KeyModifiers::NONE || key.modifiers == crossterm::event::KeyModifiers::SHIFT {
+            match key.code {
+                crossterm::event::KeyCode::Char('d') | crossterm::event::KeyCode::Char('D') => {
+                    if let Some(post) = self.state.selected().and_then(|i| self.items.get(i)) {
+                        if Some(&post.post.author.did) == self.session.as_ref().map(|s| &s.data.did) {
+                            return Ok(Some(Action::Delete));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(None)
+    }
     fn activate(&mut self) -> Result<()> {
         let (tx, mut rx) = (self.action_tx.clone(), self.watcher.subscribe());
         let (quit_tx, mut quit_rx) = oneshot::channel();
@@ -178,12 +204,27 @@ impl ViewComponent for FeedViewComponent {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::NextItem if !self.items.is_empty() => {
+                let is_at_bottom = self
+                    .state
+                    .selected()
+                    .map(|s| s >= self.items.len() - 1)
+                    .unwrap_or(false);
+                
+                log::info!("NextItem: is_at_bottom={}, loading_more={}, items_len={}", 
+                    is_at_bottom, self.loading_more, self.items.len());
+                
                 self.state.select(Some(
                     self.state
                         .selected()
                         .map(|s| (s + 1).min(self.items.len() - 1))
                         .unwrap_or_default(),
                 ));
+                
+                if is_at_bottom && !self.loading_more {
+                    log::info!("Triggering load more...");
+                    self.loading_more = true;
+                    self.watcher.load_more();
+                }
                 return Ok(Some(Action::Render));
             }
             Action::PrevItem if !self.items.is_empty() => {
@@ -218,25 +259,53 @@ impl ViewComponent for FeedViewComponent {
             Action::Refresh => {
                 self.watcher.refresh();
             }
+            Action::Delete => {
+                if let Some(post) = self.state.selected().and_then(|i| self.items.get(i)) {
+                    log::info!("Handling Action::Delete in FeedView for URI: {}", post.post.uri);
+                    let (agent, tx) = (self.agent.clone(), self.action_tx.clone());
+                    let at_uri = post.post.uri.clone();
+                    tokio::spawn(async move {
+                        match agent.delete_record(at_uri.clone()).await {
+                            Ok(_) => {
+                                log::info!("Successfully deleted record from feed: {}", at_uri);
+                                tx.send(Action::Refresh).ok();
+                            }
+                            Err(e) => {
+                                log::error!("Failed to delete record from feed {}: {e}", at_uri);
+                            }
+                        }
+                    });
+                }
+            }
             Action::Update(data) => {
                 let Data::Feed(feed) = data.as_ref() else {
                     return Ok(None);
                 };
-                log::debug!("update feed view: {}", feed.len());
-                // TODO: update state.selected
-                let select = if let Some(cid) = self
-                    .state
-                    .selected()
-                    .and_then(|i| self.items.get(i))
-                    .map(|feed_view_post| feed_view_post.post.cid.as_ref())
-                {
-                    feed.iter()
-                        .position(|feed_view_post| feed_view_post.post.cid.as_ref() == cid)
+                log::info!("Update: old_items={}, new_items={}, loading_more={}", 
+                    self.items.len(), feed.len(), self.loading_more);
+                
+                if self.loading_more {
+                    let old_len = self.items.len();
+                    self.items.extend(feed.clone());
+                    log::info!("Extended items: {} -> {}", old_len, self.items.len());
+                    self.loading_more = false;
+                    self.state.select(Some(old_len.saturating_sub(1)));
                 } else {
-                    None
-                };
-                self.items.clone_from(feed);
-                self.state.select(select);
+                    let select = if let Some(cid) = self
+                        .state
+                        .selected()
+                        .and_then(|i| self.items.get(i))
+                        .map(|feed_view_post| feed_view_post.post.cid.as_ref())
+                    {
+                        feed.iter()
+                            .position(|feed_view_post| feed_view_post.post.cid.as_ref() == cid)
+                    } else {
+                        None
+                    };
+                    self.items.clone_from(feed);
+                    self.state.select(select);
+                }
+                
                 return Ok(Some(Action::Render));
             }
             _ => {}

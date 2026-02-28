@@ -122,14 +122,16 @@ impl ColumnComponent {
         Ok(match view {
             View::Login => Box::new(LoginComponent::new(self.view_tx.clone())),
             View::Root => Box::new(RootComponent::new(self.view_tx.clone(), watcher.clone())),
-            View::NewPost => Box::new(NewPostViewComponent::new(
+            View::NewPost(reply) => Box::new(NewPostViewComponent::new(
                 self.view_tx.clone(),
                 watcher.agent.clone(),
+                reply.clone(),
             )),
             View::Feed(info) => Box::new(FeedViewComponent::new(
                 self.view_tx.clone(),
                 watcher.clone(),
                 info.as_ref().clone(),
+                self.session.read().unwrap().clone(),
             )),
             View::Post(boxed) => {
                 let (post_view, reply) = boxed.as_ref();
@@ -180,15 +182,18 @@ impl Component for ColumnComponent {
                         if !self
                             .views
                             .last()
-                            .map(|view| view.view() == View::NewPost)
+                            .map(|view| matches!(view.view(), View::NewPost(_)))
                             .unwrap_or_default()
                         {
-                            return self.transition(&Transition::Push(Box::new(View::NewPost)));
+                            return self.transition(&Transition::Push(Box::new(View::NewPost(None))));
                         }
                     }
                     ViewAction::Menu if self.watcher.is_some() => {
                         self.is_menu_active = !self.is_menu_active;
                         return Ok(Some(Action::Render));
+                    }
+                    ViewAction::Transition(transition) => {
+                        return self.transition(&transition);
                     }
                     _ => {}
                 }
