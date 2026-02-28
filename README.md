@@ -15,7 +15,9 @@
   - [x] Embed images
   - [x] Embed record
   - [ ] Embed external links
-  - [ ] Reply to post
+  - [x] Reply to post
+- [x] Repost / Unrepost
+- [x] Delete post/reply
 - [ ] Notifications, Chat, ...
 - [x] Configure with files
 - [ ] ... and more
@@ -66,9 +68,21 @@ Column:
 - `Down`: Next item
 - `Up`: Prev item
 - `Enter`: Select item
-- `Backspace`: Back to previous view
+- `Backspace` / `Esc`: Back to previous view
 - `Ctrl-r`: Refresh current view
 - `Ctrl-x`: Open/Close menu
+- `d`: Delete selected post/reply (if author)
+
+New Post / Reply:
+
+- `Alt-Enter` / `Ctrl-s`: Send post
+- `Esc`: Cancel and back
+
+Post View:
+
+- `d`: Delete selected post/reply or main post (if author)
+- `Enter`: Navigate to selected post/reply detail from the list
+- `Tab`: Switch focus between post text and actions list
 
 
 ### Configuration with toml file
