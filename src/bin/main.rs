@@ -37,7 +37,18 @@ impl Args {
 fn init_logger() {
     let mut builder = env_logger::Builder::from_default_env();
     if env::var("RUST_LOG").is_err() {
-        builder.filter_level(log::LevelFilter::Off);
+        builder.filter_level(log::LevelFilter::Info);
+    }
+    let log_path = get_config_dir()
+        .ok()
+        .map(|d| d.join("tuisky.log"))
+        .unwrap_or_else(|| std::path::PathBuf::from("tuisky.log"));
+    if let Ok(file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        builder.target(env_logger::Target::Pipe(Box::new(file)));
     }
     builder.init();
 }
@@ -45,6 +56,8 @@ fn init_logger() {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
+    init_logger();
+    
     let mut config = if args.config_path()?.exists() {
         toml::from_str(&fs::read_to_string(args.config_path()?)?)?
     } else {
@@ -54,8 +67,6 @@ async fn main() -> Result<()> {
     if let Some(num_columns) = args.num_columns {
         config.num_columns = Some(num_columns);
     }
-
-    init_logger();
 
     initialize_panic_handler()?;
 

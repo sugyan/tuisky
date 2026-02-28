@@ -21,7 +21,10 @@ pub fn get_data_dir() -> Result<PathBuf> {
 }
 
 pub fn get_config_dir() -> Result<PathBuf> {
-    Ok(project_dirs()?.config_dir().to_path_buf())
+    let home = std::env::var("HOME")
+        .map(PathBuf::from)
+        .map_err(|_| eyre::eyre!("failed to get HOME env"))?;
+    Ok(home.join(".config").join("tuisky"))
 }
 
 fn project_dirs() -> Result<ProjectDirs> {
