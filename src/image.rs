@@ -6,6 +6,11 @@ use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// 缩略图最大宽度（像素），用于终端显示优化
+pub const THUMBNAIL_MAX_WIDTH: u32 = 800;
+/// 缩略图最大高度（像素）
+pub const THUMBNAIL_MAX_HEIGHT: u32 = 600;
+
 /// Image data for caching (bytes can be cloned)
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImageData {
@@ -29,6 +34,13 @@ impl ImageData {
     pub fn dimensions(&self) -> Option<(u32, u32)> {
         self.width.zip(self.height)
     }
+}
+
+/// 缓存的缩略图（解码后的图片）
+pub struct ThumbnailCache {
+    pub thumbnail: image::DynamicImage,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Image renderer that supports multiple terminal graphics protocols
@@ -117,6 +129,44 @@ impl ImageRenderer {
         let protocol = self.picker.new_resize_protocol(img);
 
         Ok(protocol)
+    }
+
+    /// Create thumbnail from image bytes (scaled down for faster rendering)
+    pub fn create_thumbnail(&self, image_bytes: &[u8]) -> Result<ThumbnailCache, String> {
+        let mut img = image::ImageReader::new(Cursor::new(image_bytes))
+            .with_guessed_format()
+            .map_err(|e| format!("Failed to read image: {e}"))?
+            .decode()
+            .map_err(|e| format!("Failed to decode image: {e}"))?;
+
+        let (orig_width, orig_height) = (img.width(), img.height());
+
+        // Scale down if image is larger than thumbnail max size
+        if orig_width > THUMBNAIL_MAX_WIDTH || orig_height > THUMBNAIL_MAX_HEIGHT {
+            let scale_w = THUMBNAIL_MAX_WIDTH as f32 / orig_width as f32;
+            let scale_h = THUMBNAIL_MAX_HEIGHT as f32 / orig_height as f32;
+            let scale = scale_w.min(scale_h);
+            
+            let new_width = (orig_width as f32 * scale) as u32;
+            let new_height = (orig_height as f32 * scale) as u32;
+            
+            img = img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3);
+            
+            log::debug!("Created thumbnail: {}x{} -> {}x{}", orig_width, orig_height, new_width, new_height);
+        } else {
+            log::debug!("Using original size: {}x{}", orig_width, orig_height);
+        }
+
+        Ok(ThumbnailCache {
+            thumbnail: img,
+            width: orig_width,
+            height: orig_height,
+        })
+    }
+
+    /// Create protocol from thumbnail for fast rendering
+    pub fn create_protocol_from_thumbnail(&self, thumbnail: &image::DynamicImage) -> StatefulProtocol {
+        self.picker.new_resize_protocol(thumbnail.clone())
     }
 
     /// Get the detected protocol type
@@ -253,8 +303,16 @@ pub fn get_image_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
 /// 线程安全的图像缓存
 pub type ImageCache = Arc<Mutex<std::collections::HashMap<String, Vec<u8>>>>;
 
+/// 线程安全的缩略图缓存
+pub type ThumbnailStore = Arc<Mutex<std::collections::HashMap<String, ThumbnailCache>>>;
+
 /// Create a new image cache
 pub fn create_image_cache() -> ImageCache {
+    Arc::new(Mutex::new(std::collections::HashMap::new()))
+}
+
+/// Create a new thumbnail cache
+pub fn create_thumbnail_cache() -> ThumbnailStore {
     Arc::new(Mutex::new(std::collections::HashMap::new()))
 }
 

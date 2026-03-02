@@ -1,6 +1,6 @@
 use super::ViewComponent;
 use super::types::{Action, Data, Transition, View};
-use crate::image::{ImageCache, ImageData, ImageRenderer};
+use crate::image::{ImageCache, ImageData, ImageRenderer, ThumbnailStore};
 use color_eyre::Result;
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
@@ -25,6 +25,7 @@ pub struct ImageViewerComponent {
     loading_state: LoadingState,
     renderer: Arc<ImageRenderer>,
     image_cache: ImageCache,
+    thumbnail_cache: ThumbnailStore,
     action_tx: UnboundedSender<Action>,
     quit: Option<oneshot::Sender<()>>,
 }
@@ -36,6 +37,7 @@ impl ImageViewerComponent {
         alt_text: Option<String>,
         renderer: Arc<ImageRenderer>,
         image_cache: ImageCache,
+        thumbnail_cache: ThumbnailStore,
     ) -> Self {
         Self {
             image_url,
@@ -43,6 +45,7 @@ impl ImageViewerComponent {
             loading_state: LoadingState::Loading,
             renderer,
             image_cache,
+            thumbnail_cache,
             action_tx,
             quit: None,
         }
@@ -54,17 +57,33 @@ impl ImageViewerComponent {
         let tx = self.action_tx.clone();
         let url = self.image_url.clone();
         let cache = Arc::clone(&self.image_cache);
+        let thumbnail_cache = Arc::clone(&self.thumbnail_cache);
+        let renderer = Arc::clone(&self.renderer);
 
         self.quit = Some(quit_tx);
 
         tokio::spawn(async move {
             // Fetch image with caching
-            match crate::image::get_or_fetch_image(&cache, &url).await {
-                Ok(bytes) => {
+            let bytes = match crate::image::get_or_fetch_image(&cache, &url).await {
+                Ok(b) => b,
+                Err(e) => {
+                    let _ = tx.send(Action::Update(Box::new(Data::ImageError(format!("Failed to fetch image: {}", e)))));
+                    return;
+                }
+            };
+
+            // Create thumbnail for fast rendering
+            match renderer.create_thumbnail(&bytes) {
+                Ok(thumbnail) => {
+                    // Store thumbnail in cache
+                    {
+                        let mut thumb_guard = thumbnail_cache.lock().await;
+                        thumb_guard.insert(url.clone(), thumbnail);
+                    }
                     let _ = tx.send(Action::Update(Box::new(Data::ImageLoaded(ImageData::new(bytes, url)))));
                 }
                 Err(e) => {
-                    let _ = tx.send(Action::Update(Box::new(Data::ImageError(format!("Failed to fetch image: {}", e)))));
+                    let _ = tx.send(Action::Update(Box::new(Data::ImageError(format!("Failed to create thumbnail: {}", e)))));
                 }
             }
         });
@@ -167,23 +186,48 @@ impl ViewComponent for ImageViewerComponent {
                 f.render_widget(paragraph, inner_area);
             }
             LoadingState::Loaded(image_data) => {
-                // Create image state from bytes and render using ratatui-image
-                match self.renderer.create_image_state(&image_data.bytes) {
-                    Ok(mut protocol) => {
-                        let image_widget = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>::default();
-                        f.render_stateful_widget(
-                            image_widget,
-                            inner_area,
-                            &mut protocol,
-                        );
+                // Get thumbnail from cache and render
+                let thumbnail_cache = Arc::clone(&self.thumbnail_cache);
+                let url = self.image_url.clone();
+                let renderer = Arc::clone(&self.renderer);
+                
+                // Try to get cached thumbnail
+                let mut cached_thumbnail = None;
+                {
+                    let thumb_guard = futures_executor::block_on(thumbnail_cache.lock());
+                    if let Some(thumb) = thumb_guard.get(&url) {
+                        cached_thumbnail = Some(thumb.thumbnail.clone());
                     }
-                    Err(e) => {
-                        let text = Text::from(vec![
-                            Line::from(""),
-                            Line::from("❌ Failed to render image").red().centered(),
-                            Line::from(format!("Error: {}", e)).red().centered(),
-                        ]);
-                        f.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner_area);
+                }
+
+                if let Some(thumb) = cached_thumbnail {
+                    // Create protocol from thumbnail and render
+                    let mut protocol = renderer.create_protocol_from_thumbnail(&thumb);
+                    let image_widget = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>::default();
+                    f.render_stateful_widget(
+                        image_widget,
+                        inner_area,
+                        &mut protocol,
+                    );
+                } else {
+                    // Fallback: render from bytes (slow)
+                    match self.renderer.create_image_state(&image_data.bytes) {
+                        Ok(mut protocol) => {
+                            let image_widget = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>::default();
+                            f.render_stateful_widget(
+                                image_widget,
+                                inner_area,
+                                &mut protocol,
+                            );
+                        }
+                        Err(e) => {
+                            let text = Text::from(vec![
+                                Line::from(""),
+                                Line::from("❌ Failed to render image").red().centered(),
+                                Line::from(format!("Error: {}", e)).red().centered(),
+                            ]);
+                            f.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner_area);
+                        }
                     }
                 }
 
@@ -218,6 +262,7 @@ pub struct ImageGalleryComponent {
     current_index: usize,
     renderer: Arc<ImageRenderer>,
     image_cache: ImageCache,
+    thumbnail_cache: ThumbnailStore,
     action_tx: UnboundedSender<Action>,
     quit: Option<oneshot::Sender<()>>,
     loading_states: Vec<LoadingState>,
@@ -229,6 +274,7 @@ impl ImageGalleryComponent {
         image_urls: Vec<(String, Option<String>)>,
         renderer: Arc<ImageRenderer>,
         image_cache: ImageCache,
+        thumbnail_cache: ThumbnailStore,
     ) -> Self {
         let len = image_urls.len();
         Self {
@@ -236,6 +282,7 @@ impl ImageGalleryComponent {
             current_index: 0,
             renderer,
             image_cache,
+            thumbnail_cache,
             action_tx,
             quit: None,
             loading_states: vec![LoadingState::Loading; len],
@@ -257,17 +304,33 @@ impl ImageGalleryComponent {
             let tx = self.action_tx.clone();
             let index = self.current_index;
             let cache = Arc::clone(&self.image_cache);
+            let thumbnail_cache = Arc::clone(&self.thumbnail_cache);
+            let renderer = Arc::clone(&self.renderer);
 
             self.quit = Some(quit_tx);
 
             tokio::spawn(async move {
                 // Fetch image with caching
-                match crate::image::get_or_fetch_image(&cache, &url).await {
-                    Ok(bytes) => {
+                let bytes = match crate::image::get_or_fetch_image(&cache, &url).await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let _ = tx.send(Action::Update(Box::new(Data::GalleryImageError(index, format!("Failed to fetch: {}", e)))));
+                        return;
+                    }
+                };
+
+                // Create thumbnail for fast rendering
+                match renderer.create_thumbnail(&bytes) {
+                    Ok(thumbnail) => {
+                        // Store thumbnail in cache
+                        {
+                            let mut thumb_guard = thumbnail_cache.lock().await;
+                            thumb_guard.insert(url.clone(), thumbnail);
+                        }
                         let _ = tx.send(Action::Update(Box::new(Data::GalleryImageLoaded(index, ImageData::new(bytes, url)))));
                     }
                     Err(e) => {
-                        let _ = tx.send(Action::Update(Box::new(Data::GalleryImageError(index, format!("Failed to fetch: {}", e)))));
+                        let _ = tx.send(Action::Update(Box::new(Data::GalleryImageError(index, format!("Failed to create thumbnail: {}", e)))));
                     }
                 }
             });
@@ -393,23 +456,48 @@ impl ViewComponent for ImageGalleryComponent {
                     f.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner_area);
                 }
                 LoadingState::Loaded(image_data) => {
-                    // Create image state from bytes and render using ratatui-image
-                    match self.renderer.create_image_state(&image_data.bytes) {
-                        Ok(mut protocol) => {
-                            let image_widget = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>::default();
-                            f.render_stateful_widget(
-                                image_widget,
-                                inner_area,
-                                &mut protocol,
-                            );
+                    // Get thumbnail from cache and render
+                    let thumbnail_cache = Arc::clone(&self.thumbnail_cache);
+                    let url = url.clone();
+                    let renderer = Arc::clone(&self.renderer);
+                    
+                    // Try to get cached thumbnail
+                    let mut cached_thumbnail = None;
+                    {
+                        let thumb_guard = futures_executor::block_on(thumbnail_cache.lock());
+                        if let Some(thumb) = thumb_guard.get(&url) {
+                            cached_thumbnail = Some(thumb.thumbnail.clone());
                         }
-                        Err(e) => {
-                            let text = Text::from(vec![
-                                Line::from(""),
-                                Line::from("❌ Failed to render image").red().centered(),
-                                Line::from(format!("Error: {}", e)).red().centered(),
-                            ]);
-                            f.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner_area);
+                    }
+
+                    if let Some(thumb) = cached_thumbnail {
+                        // Create protocol from thumbnail and render
+                        let mut protocol = renderer.create_protocol_from_thumbnail(&thumb);
+                        let image_widget = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>::default();
+                        f.render_stateful_widget(
+                            image_widget,
+                            inner_area,
+                            &mut protocol,
+                        );
+                    } else {
+                        // Fallback: render from bytes (slow)
+                        match self.renderer.create_image_state(&image_data.bytes) {
+                            Ok(mut protocol) => {
+                                let image_widget = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>::default();
+                                f.render_stateful_widget(
+                                    image_widget,
+                                    inner_area,
+                                    &mut protocol,
+                                );
+                            }
+                            Err(e) => {
+                                let text = Text::from(vec![
+                                    Line::from(""),
+                                    Line::from("❌ Failed to render image").red().centered(),
+                                    Line::from(format!("Error: {}", e)).red().centered(),
+                                ]);
+                                f.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner_area);
+                            }
                         }
                     }
 

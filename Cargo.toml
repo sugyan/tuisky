@@ -19,6 +19,7 @@ color-eyre = "0.6.3"
 crossterm = { version = "0.28.1", features = ["event-stream", "serde"] }
 directories = "5.0.1"
 env_logger = "0.11.3"
+futures-executor = "0.3"
 futures-util = "0.3.30"
 image = { version = "0.25.2", default-features = false, features = ["jpeg", "png"] }
 indexmap = "2.2.6"
