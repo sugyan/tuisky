@@ -1,4 +1,5 @@
 use crate::backend::types::{FeedSourceInfo, PinnedFeed};
+use crate::image::ImageData;
 use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, PostView, ViewerState};
 use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use bsky_sdk::api::types::Union;
@@ -20,6 +21,7 @@ pub enum Action {
     Logout,
     Update(Box<Data>),
     Transition(Transition),
+    ViewImages(Vec<(String, Option<String>)>), // (image_url, alt_text)
 }
 
 impl Debug for Action {
@@ -38,6 +40,7 @@ impl Debug for Action {
             Action::Logout => write!(f, "Logout"),
             Action::Update(_) => write!(f, "Update"),
             Action::Transition(arg) => f.debug_tuple("Transition").field(arg).finish(),
+            Action::ViewImages(images) => f.debug_tuple("ViewImages").field(&images.len()).finish(),
         }
     }
 }
@@ -48,6 +51,11 @@ pub enum Data {
     Feed(Vec<FeedViewPost>),
     PostThread(Union<OutputThreadRefs>),
     ViewerState(Option<ViewerState>),
+    // Image viewer data
+    ImageLoaded(ImageData),
+    ImageError(String),
+    GalleryImageLoaded(usize, ImageData),
+    GalleryImageError(usize, String),
 }
 
 #[derive(Debug, Clone)]
@@ -71,4 +79,5 @@ pub enum View {
     NewPost(Option<ReplyContext>),
     Feed(Box<FeedSourceInfo>),
     Post(Box<(PostView, Option<PostView>)>),
+    ImageGallery(Vec<(String, Option<String>)>), // Vec<(image_url, alt_text)>
 }

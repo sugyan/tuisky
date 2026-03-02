@@ -10,7 +10,7 @@ use bsky_sdk::api::types::Union;
 use bsky_sdk::api::types::string::{Datetime, Language};
 use bsky_sdk::rich_text::RichText;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use futures_util::future;
 use image::{ImageFormat, ImageReader};
 use ratatui::layout::{Constraint, Layout};
@@ -110,7 +110,7 @@ impl NewPostViewComponent {
         if let Some(curr) = self.current_textarea() {
             curr.set_cursor_style(Style::default().reversed());
             if let Some(block) = curr.block() {
-                curr.set_block(block.clone().reset());
+                curr.set_block(block.clone().dim());
             }
         }
     }

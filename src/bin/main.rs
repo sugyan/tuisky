@@ -39,10 +39,8 @@ fn init_logger() {
     if env::var("RUST_LOG").is_err() {
         builder.filter_level(log::LevelFilter::Info);
     }
-    let log_path = get_config_dir()
-        .ok()
-        .map(|d| d.join("tuisky.log"))
-        .unwrap_or_else(|| std::path::PathBuf::from("tuisky.log"));
+    // Use fixed log path for debugging
+    let log_path = std::path::PathBuf::from("/Users/charles/.config/tuisky/tuisky.log");
     if let Ok(file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

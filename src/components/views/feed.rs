@@ -146,10 +146,10 @@ impl ViewComponent for FeedViewComponent {
     fn view(&self) -> View {
         View::Feed(Box::new(self.feed_info.clone()))
     }
-    fn handle_key_events(&mut self, key: crossterm::event::KeyEvent) -> Result<Option<Action>> {
-        if key.modifiers == crossterm::event::KeyModifiers::NONE || key.modifiers == crossterm::event::KeyModifiers::SHIFT {
+    fn handle_key_events(&mut self, key: ratatui::crossterm::event::KeyEvent) -> Result<Option<Action>> {
+        if key.modifiers == ratatui::crossterm::event::KeyModifiers::NONE || key.modifiers == ratatui::crossterm::event::KeyModifiers::SHIFT {
             match key.code {
-                crossterm::event::KeyCode::Char('d') | crossterm::event::KeyCode::Char('D') => {
+                ratatui::crossterm::event::KeyCode::Char('d') | ratatui::crossterm::event::KeyCode::Char('D') => {
                     if let Some(post) = self.state.selected().and_then(|i| self.items.get(i)) {
                         if Some(&post.post.author.did) == self.session.as_ref().map(|s| &s.data.did) {
                             return Ok(Some(Action::Delete));
@@ -349,7 +349,7 @@ impl ViewComponent for FeedViewComponent {
         f.render_widget(header, layout[0]);
         f.render_stateful_widget(
             List::new(items)
-                .highlight_style(Style::default().reset().reversed())
+                .highlight_style(Style::default().reversed())
                 .block(Block::default().padding(Padding::horizontal(1))),
             layout[1],
             &mut self.state,

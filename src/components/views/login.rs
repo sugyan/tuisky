@@ -3,7 +3,7 @@ use super::ViewComponent;
 use bsky_sdk::agent::config::Config;
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Line;

@@ -1,17 +1,18 @@
 use super::views::types::{Action as ViewAction, Transition, View};
 use super::views::{
-    FeedViewComponent, LoginComponent, MenuViewComponent, NewPostViewComponent, PostViewComponent,
-    RootComponent, ViewComponent,
+    FeedViewComponent, ImageGalleryComponent, LoginComponent, MenuViewComponent, NewPostViewComponent,
+    PostViewComponent, RootComponent, ViewComponent,
 };
 use super::Component;
 use crate::backend::Watcher;
 use crate::config::Config;
+use crate::image::{create_image_cache, ImageCache, ImageRenderer};
 use crate::types::{Action, IdType};
 use bsky_sdk::agent::config::Config as AgentConfig;
 use bsky_sdk::api::agent::atp_agent::AtpSession;
 use bsky_sdk::BskyAgent;
 use color_eyre::{eyre, Result};
-use crossterm::event::KeyEvent;
+use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::{Rect, Size};
 use ratatui::Frame;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -30,6 +31,8 @@ pub struct ColumnComponent {
     action_tx: UnboundedSender<Action>,
     view_tx: UnboundedSender<ViewAction>,
     session: Arc<RwLock<Option<AtpSession>>>,
+    image_renderer: Arc<ImageRenderer>,
+    image_cache: ImageCache,
 }
 
 impl ColumnComponent {
@@ -53,6 +56,19 @@ impl ColumnComponent {
                 }
             }
         });
+        
+        // Initialize image renderer with configured protocol or auto-detect
+        let image_renderer = Arc::new(
+            config.image_protocol
+                .as_ref()
+                .and_then(|p| p.parse().ok())
+                .and_then(|p| ImageRenderer::with_protocol(p).ok())
+                .or_else(|| ImageRenderer::new().ok())
+                .unwrap_or_default()
+        );
+
+        let image_cache = create_image_cache();
+
         Self {
             id,
             watcher: None,
@@ -63,6 +79,8 @@ impl ColumnComponent {
             action_tx,
             view_tx,
             session: Arc::new(RwLock::new(None)),
+            image_renderer,
+            image_cache,
         }
     }
     pub fn init_with_config(&mut self, config: &AgentConfig) -> Result<()> {
@@ -146,6 +164,14 @@ impl ColumnComponent {
                         .as_ref()
                         .and_then(|s| s.as_ref())
                         .cloned(),
+                ))
+            }
+            View::ImageGallery(images) => {
+                Box::new(ImageGalleryComponent::new(
+                    self.view_tx.clone(),
+                    images.clone(),
+                    Arc::clone(&self.image_renderer),
+                    Arc::clone(&self.image_cache),
                 ))
             }
         })

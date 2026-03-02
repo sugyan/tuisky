@@ -5,7 +5,7 @@ use super::types::{Data, EmbedData, ImageData};
 use super::{Action, ModalComponent};
 use bsky_sdk::api::com::atproto::repo::strong_ref;
 use color_eyre::Result;
-use crossterm::event::KeyEvent;
+use ratatui::crossterm::event::KeyEvent;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Style, Stylize};

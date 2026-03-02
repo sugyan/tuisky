@@ -40,6 +40,7 @@ enum PostAction {
     Delete,
     Open(String),
     ViewRecord(Box<record::ViewRecord>),
+    ViewImages(Vec<(String, Option<String>)>), // (image_url, alt_text)
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -69,6 +70,10 @@ impl<'a> From<&'a PostAction> for ListItem<'a> {
                 Span::from("embedded record").yellow(),
                 Span::from(" "),
                 Span::from(view_record.uri.as_str()).underlined(),
+            ])),
+            PostAction::ViewImages(images) => Self::from(Line::from(vec![
+                Span::from("View "),
+                Span::from(format!("{} image(s)", images.len())).yellow(),
             ])),
         }
     }
@@ -157,10 +162,22 @@ impl PostViewComponent {
                 }
             }
         }
+        // Collect images for viewing
+        let mut images_to_view: Vec<(String, Option<String>)> = Vec::new();
+        
         if let Some(embed) = &post_view.embed {
             match embed {
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
-                    for image in &images.images { links.insert(image.fullsize.clone()); }
+                    for image in &images.images { 
+                        links.insert(image.fullsize.clone()); 
+                        images_to_view.push((
+                            image.fullsize.clone(),
+                            Some(image.alt.clone()).filter(|s| !s.is_empty()),
+                        ));
+                    }
+                    if !images_to_view.is_empty() {
+                        actions.push(PostAction::ViewImages(images_to_view));
+                    }
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(external)) => {
                     links.insert(external.external.uri.clone());
@@ -170,7 +187,16 @@ impl PostViewComponent {
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(record_with_media)) => {
                     if let Union::Refs(bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs::AppBskyEmbedImagesView(images)) = &record_with_media.media {
-                        for image in &images.images { links.insert(image.fullsize.clone()); }
+                        for image in &images.images { 
+                            links.insert(image.fullsize.clone()); 
+                            images_to_view.push((
+                                image.fullsize.clone(),
+                                Some(image.alt.clone()).filter(|s| !s.is_empty()),
+                            ));
+                        }
+                        if !images_to_view.is_empty() {
+                            actions.push(PostAction::ViewImages(images_to_view));
+                        }
                     }
                     actions.extend(Self::record_actions(&record_with_media.record));
                 }
@@ -198,7 +224,7 @@ impl PostViewComponent {
             author_lines.push(Line::from(vec![Span::from(indent_str.clone()).dark_gray(), Span::from(display_name.as_str()).bold()]));
         }
         let text_lines = textwrap::wrap(&record.text, usize::from(width));
-        let rows = vec![
+        let mut rows = vec![
             Row::new(vec![Cell::from("CID:".gray().into_right_aligned_line()), Cell::from(post_view.cid.as_ref().to_string())]),
             Row::new(vec![Cell::from("IndexedAt:".gray().into_right_aligned_line()), Cell::from(post_view.indexed_at.as_ref().with_timezone(&Local).format("%Y-%m-%d %H:%M:%S %z").to_string()).green()]),
             Row::default().height(author_lines.len() as u16).cells(vec![Cell::from("Author:".gray().into_right_aligned_line()), Cell::from(Text::from(author_lines))]),
@@ -208,6 +234,28 @@ impl PostViewComponent {
                 Cell::from(text_lines.iter().map(|s| Line::from(vec![Span::from(indent_str.clone()).dark_gray(), Span::from(s.to_string())])).collect::<Vec<_>>()),
             ]),
         ];
+        // Add image embed info
+        if let Some(embed) = &post_view.embed {
+            match embed {
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
+                    let image_count = images.images.len();
+                    rows.push(Row::new(vec![
+                        Cell::from("Images:".gray().into_right_aligned_line()),
+                        Cell::from(Line::from(format!("{} image(s)", image_count)).yellow()),
+                    ]));
+                }
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(record_with_media)) => {
+                    if let Union::Refs(bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs::AppBskyEmbedImagesView(images)) = &record_with_media.media {
+                        let image_count = images.images.len();
+                        rows.push(Row::new(vec![
+                            Cell::from("Images:".gray().into_right_aligned_line()),
+                            Cell::from(Line::from(format!("{} image(s)", image_count)).yellow()),
+                        ]));
+                    }
+                }
+                _ => {}
+            }
+        }
         Some(rows)
     }
     fn replies_rows(replies: &Option<Vec<Union<ThreadViewPostRepliesItem>>>, width: u16, indent: usize) -> Vec<Row<'_>> {
@@ -242,18 +290,18 @@ impl PostViewComponent {
 
 impl ViewComponent for PostViewComponent {
     fn view(&self) -> View { View::Post(Box::new((self.post_view.clone(), self.reply.clone()))) }
-    fn handle_key_events(&mut self, key: crossterm::event::KeyEvent) -> Result<Option<Action>> {
-        if key.code == crossterm::event::KeyCode::Esc || key.code == crossterm::event::KeyCode::Backspace {
+    fn handle_key_events(&mut self, key: ratatui::crossterm::event::KeyEvent) -> Result<Option<Action>> {
+        if key.code == ratatui::crossterm::event::KeyCode::Esc || key.code == ratatui::crossterm::event::KeyCode::Backspace {
             return Ok(Some(Action::Back));
         }
-        if key.code == crossterm::event::KeyCode::Tab {
+        if key.code == ratatui::crossterm::event::KeyCode::Tab {
             self.focus = match self.focus { Focus::Post => Focus::Actions, Focus::Actions => Focus::Post };
             return Ok(Some(Action::Render));
         }
-        if key.modifiers == crossterm::event::KeyModifiers::NONE || key.modifiers == crossterm::event::KeyModifiers::SHIFT {
+        if key.modifiers == ratatui::crossterm::event::KeyModifiers::NONE || key.modifiers == ratatui::crossterm::event::KeyModifiers::SHIFT {
             match key.code {
-                crossterm::event::KeyCode::Char('o') => { if let Some(link) = Self::uri_to_web_url(&self.post_view.uri, &self.post_view.author.handle) { let _ = open::that(link); } return Ok(Some(Action::Render)); }
-                crossterm::event::KeyCode::Char('d') | crossterm::event::KeyCode::Char('D') => { return Ok(Some(Action::Delete)); }
+                ratatui::crossterm::event::KeyCode::Char('o') => { if let Some(link) = Self::uri_to_web_url(&self.post_view.uri, &self.post_view.author.handle) { let _ = open::that(link); } return Ok(Some(Action::Render)); }
+                ratatui::crossterm::event::KeyCode::Char('d') | ratatui::crossterm::event::KeyCode::Char('D') => { return Ok(Some(Action::Delete)); }
                 _ => {}
             }
         }
@@ -326,6 +374,10 @@ impl ViewComponent for PostViewComponent {
                                 let mut viewer = self.post_view.viewer.clone();
                                 let at_uri = uri.clone();
                                 tokio::spawn(async move { if agent.delete_record(at_uri).await.is_ok() { if let Some(v) = viewer.as_mut() { v.repost = None; } let _ = tx.send(Action::Update(Box::new(Data::ViewerState(viewer)))); } });
+                            }
+                            PostAction::ViewImages(images) => {
+                                // Open image gallery view
+                                return Ok(Some(Action::Transition(Transition::Push(Box::new(View::ImageGallery(images.clone()))))));
                             }
                             _ => {}
                         }

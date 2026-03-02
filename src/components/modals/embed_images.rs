@@ -2,8 +2,8 @@ use super::super::views::types::Action as ViewsAction;
 use super::types::{Action, Data, ImageData};
 use super::ModalComponent;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use image::ImageReader;
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::Line;
@@ -127,7 +127,7 @@ impl EmbedImagesModalComponent {
         if let Some(curr) = self.current_textarea() {
             curr.set_cursor_style(Style::default().reversed());
             if let Some(block) = curr.block() {
-                curr.set_block(block.clone().reset());
+                curr.set_block(block.clone().dim());
             }
         }
     }

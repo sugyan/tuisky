@@ -6,7 +6,7 @@ use bsky_sdk::api::com::atproto::repo::strong_ref;
 use bsky_sdk::api::types::string::{AtIdentifier, Cid, Nsid, RecordKey};
 use bsky_sdk::BskyAgent;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::Line;
@@ -129,7 +129,7 @@ impl EmbedRecordModalComponent {
         if let Focus::Input = self.focus {
             self.input.set_cursor_style(Style::default().reversed());
             if let Some(block) = self.input.block() {
-                self.input.set_block(block.clone().reset());
+                self.input.set_block(block.clone().dim());
             }
         }
     }

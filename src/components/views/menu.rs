@@ -18,20 +18,20 @@ impl<'a> From<&'a MenuAction> for ListItem<'a> {
     fn from(action: &'a MenuAction) -> Self {
         match action {
             MenuAction::NewPost(v) if !v.is_empty() => Self::from(Line::from(vec![
-                Span::from("New Post ").reset(),
+                Span::from("New Post "),
                 Span::from(format!("({})", v.join(", "))).dim(),
             ])),
-            MenuAction::NewPost(_) => Self::from("New Post".reset()),
+            MenuAction::NewPost(_) => Self::from("New Post"),
             MenuAction::Refresh(v) if !v.is_empty() => Self::from(Line::from(vec![
-                Span::from("Refresh ").reset(),
+                Span::from("Refresh "),
                 Span::from(format!("({})", v.join(", "))).dim(),
             ])),
-            MenuAction::Refresh(_) => Self::from("Refresh".reset()),
+            MenuAction::Refresh(_) => Self::from("Refresh"),
             MenuAction::Back(v) if !v.is_empty() => Self::from(Line::from(vec![
-                Span::from("Back ").reset(),
+                Span::from("Back "),
                 Span::from(format!("({})", v.join(", "))).dim(),
             ])),
-            MenuAction::Back(_) => Self::from("Back".reset()),
+            MenuAction::Back(_) => Self::from("Back"),
         }
     }
 }

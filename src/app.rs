@@ -4,8 +4,8 @@ use crate::config::Config;
 use crate::tui::{io, Tui};
 use crate::types::{Action, Event};
 use color_eyre::Result;
-use crossterm::event::KeyEvent;
 use ratatui::backend::CrosstermBackend;
+use ratatui::crossterm::event::KeyEvent;
 use ratatui::Terminal;
 use tokio::sync::mpsc;
 

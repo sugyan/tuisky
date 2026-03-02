@@ -1,6 +1,6 @@
 use crate::components::views::types::Action as ViewAction;
 use bsky_sdk::BskyAgent;
-use crossterm::event::{KeyEvent, MouseEvent};
+use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 use std::fmt::{Debug, Formatter, Result};
 
 pub type IdType = u32;

@@ -24,8 +24,10 @@ image = { version = "0.25.2", default-features = false, features = ["jpeg", "png
 indexmap = "2.2.6"
 log = "0.4.22"
 open = "5.2.0"
-ratatui = "0.29"
+ratatui = "0.30"
+ratatui-image = { version = "10.0", default-features = false, features = ["crossterm", "image-defaults"] }
 regex = "1.10.6"
+reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
 textwrap = "0.16.1"
@@ -36,7 +38,7 @@ tokio = { version = "1.38.0", features = [
     "time",
 ] }
 toml = "0.8.14"
-tui-textarea = "0.7.0"
+tui-textarea-2 = "0.10"
 
 [target.'cfg(not(windows))'.dependencies]
 signal-hook = "0.3.17"
