@@ -65,33 +65,33 @@ impl ImageRenderer {
                 })
             }
             ImageProtocol::Kitty => {
-                // Use kitty protocol via from_query_stdio
-                let picker = Picker::from_query_stdio()?;
-                let protocol_type = picker.protocol_type();
-                log::info!("Using image protocol: {:?}", protocol_type);
+                // Force kitty protocol
+                let mut picker = Picker::halfblocks();
+                picker.set_protocol_type(ProtocolType::Kitty);
+                log::info!("Using image protocol: kitty (forced)");
                 Ok(Self {
                     picker,
-                    protocol_type,
+                    protocol_type: ProtocolType::Kitty,
                 })
             }
             ImageProtocol::Iterm2 => {
-                // Use iterm2 protocol via from_query_stdio
-                let picker = Picker::from_query_stdio()?;
-                let protocol_type = picker.protocol_type();
-                log::info!("Using image protocol: {:?}", protocol_type);
+                // Force iterm2 protocol
+                let mut picker = Picker::halfblocks();
+                picker.set_protocol_type(ProtocolType::Iterm2);
+                log::info!("Using image protocol: iterm2 (forced)");
                 Ok(Self {
                     picker,
-                    protocol_type,
+                    protocol_type: ProtocolType::Iterm2,
                 })
             }
             ImageProtocol::Sixel => {
-                // Use sixel protocol via from_query_stdio
-                let picker = Picker::from_query_stdio()?;
-                let protocol_type = picker.protocol_type();
-                log::info!("Using image protocol: {:?}", protocol_type);
+                // Force sixel protocol
+                let mut picker = Picker::halfblocks();
+                picker.set_protocol_type(ProtocolType::Sixel);
+                log::info!("Using image protocol: sixel (forced)");
                 Ok(Self {
                     picker,
-                    protocol_type,
+                    protocol_type: ProtocolType::Sixel,
                 })
             }
             ImageProtocol::Halfblocks => {
