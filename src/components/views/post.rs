@@ -17,6 +17,7 @@ use bsky_sdk::api::types::{TryFromUnknown, Union};
 use bsky_sdk::{BskyAgent, api};
 use chrono::Local;
 use color_eyre::Result;
+use indexmap::IndexSet;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Style, Stylize};
@@ -149,6 +150,26 @@ impl PostViewComponent {
             actions.push(PostAction::Open(link));
         }
         
+        // Collect links from facets (excluding image CDN links)
+        let mut links = IndexSet::new();
+        if let Ok(record) = post::Record::try_from_unknown(post_view.record.clone()) {
+            if let Some(facets) = &record.facets {
+                for facet in facets {
+                    for feature in &facet.features {
+                        match feature {
+                            Union::Refs(MainFeaturesItem::Link(link)) => {
+                                // Filter out image CDN links
+                                if !link.uri.starts_with("https://cdn.bsky.app/img/") {
+                                    links.insert(link.uri.clone());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        
         // Collect images for viewing
         let mut images_to_view: Vec<(String, Option<String>)> = Vec::new();
         
@@ -213,7 +234,8 @@ impl PostViewComponent {
                 _ => {}
             }
         }
-        actions
+        // Merge actions with collected links (excluding image CDN links)
+        [actions, links.into_iter().map(PostAction::Open).collect::<Vec<_>>()].concat()
     }
     fn record_actions(record: &record::View) -> Vec<PostAction> {
         let mut actions = Vec::new();
