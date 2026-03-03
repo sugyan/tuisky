@@ -4,7 +4,7 @@ use crate::image::{ImageCache, ImageData, ImageRenderer};
 use color_eyre::Result;
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
-use ratatui::layout::{Alignment, Rect};
+use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Clear, Padding, Paragraph, Wrap};
@@ -485,6 +485,14 @@ impl ViewComponent for ImageGalleryComponent {
         let inner_area = block.inner(area);
         f.render_widget(block, area);
 
+        // Split inner area: top for loading/info, bottom for image
+        let areas = Layout::vertical([
+            Constraint::Length(3),  // Loading/info area (3 lines)
+            Constraint::Min(10),    // Image area (remaining space)
+        ]).split(inner_area);
+        let info_area = areas[0];
+        let image_area = areas[1];
+
         if let Some((url, alt)) = self.current_image() {
             let state = self.loading_states.get(self.current_index).cloned()
                 .unwrap_or(LoadingState::Error("Unknown state".to_string()));
@@ -497,25 +505,26 @@ impl ViewComponent for ImageGalleryComponent {
                         Line::from(""),
                         Line::from(format!("⏳ Loading image {}/{}...", current, total)).yellow().centered(),
                         Line::from(""),
-                        Line::from(url.as_str()).dark_gray().centered(),
                     ]);
-                    f.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner_area);
+                    f.render_widget(Paragraph::new(text).alignment(Alignment::Center), info_area);
                 }
                 LoadingState::Error(msg) => {
                     let text = Text::from(vec![
                         Line::from(""),
                         Line::from("❌ Error").red().bold().centered(),
                         Line::from(msg.as_str()).red().centered(),
-                        Line::from(""),
-                        Line::from("←/→ or h/l: Navigate | Esc/q: Back").dark_gray().centered(),
                     ]);
-                    f.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner_area);
+                    f.render_widget(Paragraph::new(text).alignment(Alignment::Center), info_area);
+                    
+                    // Show navigation hint in image area
+                    let nav_text = Text::from("←/→ or h/l: Navigate | Esc/q: Back").dark_gray().centered();
+                    f.render_widget(Paragraph::new(nav_text), image_area);
                 }
                 LoadingState::Loaded(image_data) => {
-                    // Create protocol from image bytes and render
+                    // Create protocol from image bytes and render in image_area
                     // Clear the area first to avoid image artifacts in zellij
                     log::info!("[GALLERY] Rendering Loaded image: url={}, bytes={}", image_data.url, image_data.bytes.len());
-                    f.render_widget(Clear, inner_area);
+                    f.render_widget(Clear, image_area);
                     
                     match self.renderer.create_image_state(&image_data.bytes) {
                         Ok(mut protocol) => {
@@ -523,7 +532,7 @@ impl ViewComponent for ImageGalleryComponent {
                             let image_widget = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>::default();
                             f.render_stateful_widget(
                                 image_widget,
-                                inner_area,
+                                image_area,
                                 &mut protocol,
                             );
                             log::info!("[GALLERY] Image rendered successfully");
@@ -535,11 +544,11 @@ impl ViewComponent for ImageGalleryComponent {
                                 Line::from("❌ Failed to render image").red().centered(),
                                 Line::from(format!("Error: {}", e)).red().centered(),
                             ]);
-                            f.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner_area);
+                            f.render_widget(Paragraph::new(text).alignment(Alignment::Center), image_area);
                         }
                     }
-
-                    // Show image info at bottom
+                    
+                    // Show info in info_area
                     let mut info_lines = vec![
                         Line::from(format!("Image {}/{}", current, total)).dark_gray(),
                     ];
@@ -551,12 +560,7 @@ impl ViewComponent for ImageGalleryComponent {
                     }
                     info_lines.push(Line::from("Press 'o' to open | ←/→ or h/l: Navigate | Esc/q: Back").dark_gray());
                     let info = Paragraph::new(Text::from(info_lines));
-                    f.render_widget(info, Rect {
-                        x: inner_area.x,
-                        y: inner_area.y + inner_area.height - 3,
-                        width: inner_area.width,
-                        height: 3,
-                    });
+                    f.render_widget(info, info_area);
                 }
             }
         }
