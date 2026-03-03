@@ -7,7 +7,7 @@ use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Stylize};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, Clear, Padding, Paragraph, Wrap};
+use ratatui::widgets::{Block, Clear, Padding, Paragraph};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
@@ -17,240 +17,6 @@ enum LoadingState {
     Loading,
     Loaded(ImageData),
     Error(String),
-}
-
-pub struct ImageViewerComponent {
-    image_url: String,  // 缩略图 URL
-    alt_text: Option<String>,
-    loading_state: LoadingState,
-    renderer: Arc<ImageRenderer>,
-    image_cache: ImageCache,
-    original_url: String,  // 原图 URL，用于 'o' 键打开
-    action_tx: UnboundedSender<Action>,
-    quit: Option<oneshot::Sender<()>>,
-    /// 当前期望显示的 URL，用于防抖
-    expected_url: Option<String>,
-}
-
-impl ImageViewerComponent {
-    pub fn new(
-        action_tx: UnboundedSender<Action>,
-        image_url: String,
-        alt_text: Option<String>,
-        renderer: Arc<ImageRenderer>,
-        image_cache: ImageCache,
-    ) -> Self {
-        // 保存原图 URL（将 /feed_thumbnail 替换回 /feed_fullsize）
-        let original_url = image_url
-            .replace("/feed_thumbnail", "/feed_fullsize")
-            .replace("/thumbnail", "/fullsize");
-        
-        Self {
-            image_url,
-            alt_text,
-            loading_state: LoadingState::Loading,
-            renderer,
-            image_cache,
-            original_url,
-            expected_url: None,
-            action_tx,
-            quit: None,
-        }
-    }
-
-    fn start_loading(&mut self) {
-        // 更新期望的 URL
-        self.expected_url = Some(self.image_url.clone());
-        
-        let (quit_tx, _quit_rx) = oneshot::channel();
-
-        let tx = self.action_tx.clone();
-        let url = self.image_url.clone();
-        let cache = Arc::clone(&self.image_cache);
-
-        log::info!("Starting image load: {}", url);
-
-        self.quit = Some(quit_tx);
-
-        tokio::spawn(async move {
-            // Fetch image with caching
-            let bytes = match crate::image::get_or_fetch_image(&cache, &url).await {
-                Ok(b) => {
-                    log::info!("Image fetched successfully: {} bytes", b.len());
-                    b
-                },
-                Err(e) => {
-                    log::error!("Failed to fetch image: {}", e);
-                    let _ = tx.send(Action::Update(Box::new(Data::ImageError(format!("Failed to fetch image: {}", e)))));
-                    return;
-                }
-            };
-
-            // 直接发送加载完成（带 URL，用于防抖检查）
-            log::info!("Image load complete: {}", url);
-            let _ = tx.send(Action::Update(Box::new(Data::ImageLoadedWithUrl(ImageData::new(bytes, url.clone()), url))));
-        });
-    }
-}
-
-impl ViewComponent for ImageViewerComponent {
-    fn view(&self) -> View {
-        View::ImageGallery(vec![(self.image_url.clone(), self.alt_text.clone())])
-    }
-
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
-        match key.code {
-            ratatui::crossterm::event::KeyCode::Esc | ratatui::crossterm::event::KeyCode::Backspace | ratatui::crossterm::event::KeyCode::Char('q') => {
-                Ok(Some(Action::Back))
-            }
-            // Press 'o' to open image in external viewer (use original fullsize URL)
-            ratatui::crossterm::event::KeyCode::Char('o') => {
-                let _ = open::that(self.original_url.clone());
-                Ok(None)
-            }
-            _ => Ok(None),
-        }
-    }
-    
-    fn activate(&mut self) -> Result<()> {
-        self.start_loading();
-        Ok(())
-    }
-    
-    fn deactivate(&mut self) -> Result<()> {
-        if let Some(tx) = self.quit.take() {
-            let _ = tx.send(());
-        }
-        Ok(())
-    }
-    
-    fn update(&mut self, action: Action) -> Result<Option<Action>> {
-        match action {
-            Action::Back => {
-                return Ok(Some(Action::Transition(Transition::Pop)));
-            }
-            Action::Update(data) => {
-                match data.as_ref() {
-                    Data::ImageLoaded(image_data) => {
-                        log::info!("ImageLoaded: url={}", image_data.url);
-                        self.loading_state = LoadingState::Loaded(image_data.clone());
-                        return Ok(Some(Action::Render));
-                    }
-                    Data::ImageLoadedWithUrl(image_data, url) => {
-                        // 防抖检查：只处理期望的 URL
-                        log::info!("ImageLoadedWithUrl: url={}, expected={:?}", url, self.expected_url);
-                        if self.expected_url.as_ref() == Some(url) {
-                            log::info!("URL matches expected, displaying image");
-                            self.loading_state = LoadingState::Loaded(image_data.clone());
-                            return Ok(Some(Action::Render));
-                        } else {
-                            log::warn!("URL mismatch, discarding stale image: {} != {:?}", url, self.expected_url);
-                            return Ok(None);
-                        }
-                    }
-                    Data::ImageError(msg) => {
-                        log::error!("ImageError: msg={}", msg);
-                        self.loading_state = LoadingState::Error(msg.clone());
-                        return Ok(Some(Action::Render));
-                    }
-                    _ => {
-                        log::debug!("Unhandled data: {:?}", data);
-                    }
-                }
-            }
-            _ => {}
-        }
-        Ok(None)
-    }
-    
-    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        // Clear the background
-        f.render_widget(Clear, area);
-
-        // Create a centered block for the image viewer
-        let block = Block::bordered()
-            .title(format!(" Image Viewer - {} ", self.renderer.protocol_name()).bold())
-            .title_alignment(Alignment::Center)
-            .border_style(Color::Cyan)
-            .padding(Padding::uniform(1));
-
-        let inner_area = block.inner(area);
-        f.render_widget(block, area);
-
-        match &self.loading_state {
-            LoadingState::Loading => {
-                let text = Text::from(vec![
-                    Line::from(""),
-                    Line::from("⏳ Loading image...").yellow().centered(),
-                    Line::from(""),
-                    Line::from(self.image_url.as_str()).dark_gray().centered(),
-                ]);
-                let paragraph = Paragraph::new(text)
-                    .alignment(Alignment::Center)
-                    .wrap(Wrap { trim: true });
-                f.render_widget(paragraph, inner_area);
-            }
-            LoadingState::Error(msg) => {
-                let text = Text::from(vec![
-                    Line::from(""),
-                    Line::from("❌ Error loading image").red().bold().centered(),
-                    Line::from(""),
-                    Line::from(msg.as_str()).red().centered(),
-                    Line::from(""),
-                    Line::from("Press Esc or q to go back").dark_gray().centered(),
-                ]);
-                let paragraph = Paragraph::new(text)
-                    .alignment(Alignment::Center)
-                    .wrap(Wrap { trim: true });
-                f.render_widget(paragraph, inner_area);
-            }
-            LoadingState::Loaded(image_data) => {
-                // Create protocol from image bytes and render
-                // Clear the area first to avoid image artifacts in zellij
-                f.render_widget(Clear, inner_area);
-                
-                match self.renderer.create_image_state(&image_data.bytes) {
-                    Ok(mut protocol) => {
-                        let image_widget = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>::default();
-                        f.render_stateful_widget(
-                            image_widget,
-                            inner_area,
-                            &mut protocol,
-                        );
-                    }
-                    Err(e) => {
-                        let text = Text::from(vec![
-                            Line::from(""),
-                            Line::from("❌ Failed to render image").red().centered(),
-                            Line::from(format!("Error: {}", e)).red().centered(),
-                        ]);
-                        f.render_widget(Paragraph::new(text).alignment(Alignment::Center), inner_area);
-                    }
-                }
-
-                // Show image info at bottom
-                let mut info_lines = vec![
-                    Line::from(format!("URL: {}", self.image_url)).dark_gray(),
-                ];
-                if let Some((w, h)) = image_data.dimensions() {
-                    info_lines.push(Line::from(format!("Dimensions: {}x{}", w, h)).dark_gray());
-                }
-                if let Some(alt) = &self.alt_text {
-                    info_lines.push(Line::from(format!("Alt: {}", alt)).dark_gray());
-                }
-                info_lines.push(Line::from("Press 'o' to open in external viewer | Esc/q: Back").dark_gray());
-                let info = Paragraph::new(Text::from(info_lines));
-                f.render_widget(info, Rect {
-                    x: inner_area.x,
-                    y: inner_area.y + inner_area.height - 3,
-                    width: inner_area.width,
-                    height: 3,
-                });
-            }
-        }
-
-        Ok(())
-    }
 }
 
 /// A simpler image viewer that displays multiple images in a gallery
@@ -297,10 +63,6 @@ impl ImageGalleryComponent {
 
     fn current_image(&self) -> Option<&(String, Option<String>)> {
         self.image_urls.get(self.current_index)
-    }
-
-    fn preload_adjacent_images(&self) {
-        // No preloading - keep it simple
     }
 
     fn start_loading_current(&mut self) {
@@ -425,14 +187,6 @@ impl ViewComponent for ImageGalleryComponent {
             }
             Action::Update(data) => {
                 match data.as_ref() {
-                    Data::GalleryImageLoaded(index, image_data) => {
-                        log::info!("[GALLERY] GalleryImageLoaded: index={}, url={}", index, image_data.url);
-                        if let Some(state) = self.loading_states.get_mut(*index) {
-                            *state = LoadingState::Loaded(image_data.clone());
-                            log::info!("[GALLERY] State updated to Loaded, returning Render");
-                        }
-                        return Ok(Some(Action::Render));
-                    }
                     Data::GalleryImageLoadedWithUrl(index, image_data, url) => {
                         // 防抖检查：只处理期望的 URL
                         log::info!("[GALLERY] GalleryImageLoadedWithUrl: index={}, url={}, expected={:?}", index, url, self.expected_url);

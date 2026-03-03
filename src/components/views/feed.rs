@@ -134,7 +134,7 @@ impl FeedViewComponent {
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedVideoView(_)) => {
                     String::from("video")
                 }
-                other => {
+                _other => {
                     log::debug!("Unknown embed type");
                     String::from("unknown")
                 }

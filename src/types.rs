@@ -44,6 +44,7 @@ impl Debug for Action {
 pub enum Event {
     Tick(usize),
     Key(KeyEvent),
+    #[allow(dead_code)]
     Mouse(MouseEvent),
     Error(String),
 }

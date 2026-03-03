@@ -21,7 +21,6 @@ pub enum Action {
     Logout,
     Update(Box<Data>),
     Transition(Transition),
-    ViewImages(Vec<(String, Option<String>)>), // (image_url, alt_text)
 }
 
 impl Debug for Action {
@@ -40,7 +39,6 @@ impl Debug for Action {
             Action::Logout => write!(f, "Logout"),
             Action::Update(_) => write!(f, "Update"),
             Action::Transition(arg) => f.debug_tuple("Transition").field(arg).finish(),
-            Action::ViewImages(images) => f.debug_tuple("ViewImages").field(&images.len()).finish(),
         }
     }
 }
@@ -52,10 +50,6 @@ pub enum Data {
     PostThread(Union<OutputThreadRefs>),
     ViewerState(Option<ViewerState>),
     // Image viewer data
-    ImageLoaded(ImageData),
-    ImageLoadedWithUrl(ImageData, String),  // (data, url)
-    ImageError(String),
-    GalleryImageLoaded(usize, ImageData),
     GalleryImageLoadedWithUrl(usize, ImageData, String),  // (index, data, url)
     GalleryImageError(usize, String),
 }
