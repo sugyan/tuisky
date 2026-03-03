@@ -53,8 +53,10 @@ pub enum Data {
     ViewerState(Option<ViewerState>),
     // Image viewer data
     ImageLoaded(ImageData),
+    ImageLoadedWithUrl(ImageData, String),  // (data, url)
     ImageError(String),
     GalleryImageLoaded(usize, ImageData),
+    GalleryImageLoadedWithUrl(usize, ImageData, String),  // (index, data, url)
     GalleryImageError(usize, String),
 }
 

@@ -36,9 +36,9 @@ impl ImageData {
     }
 }
 
-/// 缓存的缩略图（解码后的图片）
+/// 缓存的缩略图（压缩后的 bytes）
 pub struct ThumbnailCache {
-    pub thumbnail: image::DynamicImage,
+    pub bytes: Vec<u8>,
     pub width: u32,
     pub height: u32,
 }
@@ -133,13 +133,22 @@ impl ImageRenderer {
 
     /// Create thumbnail from image bytes (scaled down for faster rendering)
     pub fn create_thumbnail(&self, image_bytes: &[u8]) -> Result<ThumbnailCache, String> {
+        log::debug!("Creating thumbnail from {} bytes", image_bytes.len());
+        
         let mut img = image::ImageReader::new(Cursor::new(image_bytes))
             .with_guessed_format()
-            .map_err(|e| format!("Failed to read image: {e}"))?
+            .map_err(|e| {
+                log::error!("Failed to read image: {}", e);
+                format!("Failed to read image: {e}")
+            })?
             .decode()
-            .map_err(|e| format!("Failed to decode image: {e}"))?;
+            .map_err(|e| {
+                log::error!("Failed to decode image: {}", e);
+                format!("Failed to decode image: {e}")
+            })?;
 
         let (orig_width, orig_height) = (img.width(), img.height());
+        log::debug!("Original image size: {}x{}", orig_width, orig_height);
 
         // Scale down if image is larger than thumbnail max size
         if orig_width > THUMBNAIL_MAX_WIDTH || orig_height > THUMBNAIL_MAX_HEIGHT {
@@ -157,16 +166,43 @@ impl ImageRenderer {
             log::debug!("Using original size: {}x{}", orig_width, orig_height);
         }
 
+        // Encode thumbnail to PNG bytes
+        let mut thumbnail_bytes = Vec::new();
+        img.write_to(
+            &mut Cursor::new(&mut thumbnail_bytes),
+            image::ImageFormat::Png,
+        ).map_err(|e| {
+            log::error!("Failed to encode thumbnail: {}", e);
+            format!("Failed to encode thumbnail: {}", e)
+        })?;
+
+        log::debug!("Thumbnail encoded: {} bytes", thumbnail_bytes.len());
+
         Ok(ThumbnailCache {
-            thumbnail: img,
+            bytes: thumbnail_bytes,
             width: orig_width,
             height: orig_height,
         })
     }
 
-    /// Create protocol from thumbnail for fast rendering
-    pub fn create_protocol_from_thumbnail(&self, thumbnail: &image::DynamicImage) -> StatefulProtocol {
-        self.picker.new_resize_protocol(thumbnail.clone())
+    /// Create protocol from thumbnail bytes for fast rendering
+    pub fn create_protocol_from_thumbnail(&self, thumbnail_bytes: &[u8]) -> Result<StatefulProtocol, String> {
+        log::debug!("Creating protocol from {} thumbnail bytes", thumbnail_bytes.len());
+        
+        let img = image::ImageReader::new(Cursor::new(thumbnail_bytes))
+            .with_guessed_format()
+            .map_err(|e| {
+                log::error!("Failed to read thumbnail: {}", e);
+                format!("Failed to read thumbnail: {e}")
+            })?
+            .decode()
+            .map_err(|e| {
+                log::error!("Failed to decode thumbnail: {}", e);
+                format!("Failed to decode thumbnail: {e}")
+            })?;
+        
+        log::debug!("Creating protocol from {}x{} image", img.width(), img.height());
+        Ok(self.picker.new_resize_protocol(img))
     }
 
     /// Get the detected protocol type
@@ -273,14 +309,26 @@ pub fn calculate_image_size(
 
 /// Fetch image data from URL
 pub async fn fetch_image(url: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    log::info!("Fetching image from URL: {}", url);
+    
     let response = reqwest::get(url)
         .await
-        .map_err(|e| format!("Failed to fetch image: {e}"))?;
+        .map_err(|e| {
+            log::error!("Failed to fetch image: {}", e);
+            format!("Failed to fetch image: {e}")
+        })?;
+
+    log::info!("Image response status: {}", response.status());
 
     let bytes = response
         .bytes()
         .await
-        .map_err(|e| format!("Failed to read image bytes: {e}"))?;
+        .map_err(|e| {
+            log::error!("Failed to read image bytes: {}", e);
+            format!("Failed to read image bytes: {e}")
+        })?;
+
+    log::info!("Image downloaded successfully: {} bytes", bytes.len());
 
     Ok(bytes.to_vec())
 }
@@ -329,12 +377,13 @@ pub async fn get_or_fetch_image(
         }
     }
 
-    log::debug!("Fetching image from: {}", url);
+    log::debug!("Image cache miss, fetching from: {}", url);
     let data = fetch_image(url).await?;
 
     {
         let mut cache_guard = cache.lock().await;
         cache_guard.insert(url.to_string(), data.clone());
+        log::debug!("Image cached: {} bytes", data.len());
     }
 
     Ok(data)

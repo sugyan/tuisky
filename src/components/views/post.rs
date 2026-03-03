@@ -168,10 +168,24 @@ impl PostViewComponent {
         if let Some(embed) = &post_view.embed {
             match embed {
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
-                    for image in &images.images { 
-                        links.insert(image.fullsize.clone()); 
+                    for image in &images.images {
+                        links.insert(image.fullsize.clone());
+                        // 使用缩略图 URL 加快加载速度
+                        // BlueSky CDN 支持：/feed_fullsize, /feed_thumbnail, /fullsize, /thumbnail
+                        let thumb_url = if image.fullsize.contains("/feed_thumbnail") || image.fullsize.contains("/thumbnail") {
+                            // 已经是缩略图，直接使用
+                            log::info!("Image already thumbnail: {}", image.fullsize);
+                            image.fullsize.clone()
+                        } else {
+                            // 替换为 thumbnail (处理 /feed_fullsize 和 /fullsize)
+                            let url = image.fullsize
+                                .replace("/feed_fullsize", "/feed_thumbnail")
+                                .replace("/fullsize", "/thumbnail");
+                            log::info!("Image URL: {} -> {}", image.fullsize, url);
+                            url
+                        };
                         images_to_view.push((
-                            image.fullsize.clone(),
+                            thumb_url,
                             Some(image.alt.clone()).filter(|s| !s.is_empty()),
                         ));
                     }
@@ -187,10 +201,21 @@ impl PostViewComponent {
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(record_with_media)) => {
                     if let Union::Refs(bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs::AppBskyEmbedImagesView(images)) = &record_with_media.media {
-                        for image in &images.images { 
-                            links.insert(image.fullsize.clone()); 
+                        for image in &images.images {
+                            links.insert(image.fullsize.clone());
+                            // 使用缩略图 URL 加快加载速度
+                            let thumb_url = if image.fullsize.contains("/feed_thumbnail") || image.fullsize.contains("/thumbnail") {
+                                log::info!("Image already thumbnail: {}", image.fullsize);
+                                image.fullsize.clone()
+                            } else {
+                                let url = image.fullsize
+                                    .replace("/feed_fullsize", "/feed_thumbnail")
+                                    .replace("/fullsize", "/thumbnail");
+                                log::info!("Image URL: {} -> {}", image.fullsize, url);
+                                url
+                            };
                             images_to_view.push((
-                                image.fullsize.clone(),
+                                thumb_url,
                                 Some(image.alt.clone()).filter(|s| !s.is_empty()),
                             ));
                         }

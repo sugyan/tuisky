@@ -6,7 +6,7 @@ use super::views::{
 use super::Component;
 use crate::backend::Watcher;
 use crate::config::Config;
-use crate::image::{create_image_cache, create_thumbnail_cache, ImageCache, ImageRenderer, ThumbnailStore};
+use crate::image::{create_image_cache, ImageCache, ImageRenderer};
 use crate::types::{Action, IdType};
 use bsky_sdk::agent::config::Config as AgentConfig;
 use bsky_sdk::api::agent::atp_agent::AtpSession;
@@ -33,7 +33,6 @@ pub struct ColumnComponent {
     session: Arc<RwLock<Option<AtpSession>>>,
     image_renderer: Arc<ImageRenderer>,
     image_cache: ImageCache,
-    thumbnail_cache: ThumbnailStore,
 }
 
 impl ColumnComponent {
@@ -69,7 +68,6 @@ impl ColumnComponent {
         );
 
         let image_cache = create_image_cache();
-        let thumbnail_cache = create_thumbnail_cache();
 
         Self {
             id,
@@ -83,7 +81,6 @@ impl ColumnComponent {
             session: Arc::new(RwLock::new(None)),
             image_renderer,
             image_cache,
-            thumbnail_cache,
         }
     }
     pub fn init_with_config(&mut self, config: &AgentConfig) -> Result<()> {
@@ -175,7 +172,6 @@ impl ColumnComponent {
                     images.clone(),
                     Arc::clone(&self.image_renderer),
                     Arc::clone(&self.image_cache),
-                    Arc::clone(&self.thumbnail_cache),
                 ))
             }
         })
