@@ -131,7 +131,13 @@ impl FeedViewComponent {
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(_)) => {
                     String::from("recordWithMedia")
                 }
-                _ => String::from("unknown"),
+                Union::Refs(PostViewEmbedRefs::AppBskyEmbedVideoView(_)) => {
+                    String::from("video")
+                }
+                other => {
+                    log::debug!("Unknown embed type");
+                    String::from("unknown")
+                }
             };
             lines.push(Line::from(format!("  Embedded {content}")).yellow());
         }
