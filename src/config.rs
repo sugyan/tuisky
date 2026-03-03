@@ -1,7 +1,7 @@
 use crate::backend::config::Config as WatcherConfig;
 use crate::components::views::types::Action as ViewAction;
 use crate::types::Action as AppAction;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
@@ -12,6 +12,10 @@ pub struct Config {
     pub keybindings: Keybindings,
     #[serde(default)]
     pub watcher: WatcherConfig,
+    /// Image protocol to use for rendering images in terminal
+    /// Options: "auto", "kitty", "iterm2", "sixel", "halfblocks"
+    /// Default: "auto" (auto-detect based on terminal capabilities)
+    pub image_protocol: Option<String>,
 }
 
 impl Config {

@@ -1,10 +1,9 @@
 use crate::types::Event;
 use color_eyre::Result;
-use crossterm::event::{Event as CrosstermEvent, EventStream, KeyEventKind};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
-use crossterm::{cursor, execute};
-use futures_util::{FutureExt, StreamExt};
+use crossterm::event::{poll, read, Event as CrosstermEvent, KeyEventKind};
+use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use ratatui::crossterm::{cursor, execute};
 use ratatui::backend::Backend;
 use ratatui::Terminal;
 use std::io::{stdout, Write};
@@ -45,14 +44,31 @@ where
         init()?;
         let event_tx = self.event_tx.clone();
         self.task = Some(tokio::spawn(async move {
-            let mut reader = EventStream::new();
             let mut tick_interval = time::interval(Duration::from_secs(1));
             let mut tick = 0;
             loop {
-                let event = reader.next().fuse();
+                let poll_future = tokio::task::spawn_blocking(|| {
+                    poll(Duration::from_millis(100))
+                });
                 let tick_tick = tick_interval.tick();
                 tokio::select! {
-                    e = event => Self::handle_crossterm_event(e, &event_tx),
+                    result = poll_future => {
+                        match result {
+                            Ok(Ok(true)) => {
+                                // Read the event
+                                if let Ok(event) = read() {
+                                    Self::handle_crossterm_event(Some(Ok(event)), &event_tx);
+                                }
+                            }
+                            Ok(Ok(false)) => {} // No event available
+                            Ok(Err(e)) => {
+                                event_tx.send(Event::Error(e.to_string())).unwrap();
+                            }
+                            Err(e) => {
+                                log::error!("Failed to poll events: {e}");
+                            }
+                        }
+                    }
                     _ = tick_tick => {
                         tick += 1;
                         if let Err(e) = event_tx.send(Event::Tick(tick)) {
@@ -72,7 +88,7 @@ where
     }
     #[cfg(not(windows))]
     pub fn clear(&mut self) -> Result<()> {
-        self.terminal.clear()?;
+        self.terminal.clear().map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
         Ok(())
     }
     pub fn end(&mut self) -> Result<()> {
@@ -88,14 +104,50 @@ where
     ) {
         match event {
             Some(Ok(event)) => match event {
-                CrosstermEvent::Mouse(mouse) => {
-                    tx.send(Event::Mouse(mouse)).unwrap();
-                }
                 CrosstermEvent::Key(key) if key.kind != KeyEventKind::Release => {
-                    tx.send(Event::Key(key)).unwrap();
+                    // Convert crossterm 0.28 KeyEvent to ratatui::crossterm 0.29 KeyEvent
+                    let ratatui_key = ratatui::crossterm::event::KeyEvent {
+                        code: match key.code {
+                            crossterm::event::KeyCode::Char(c) => ratatui::crossterm::event::KeyCode::Char(c),
+                            crossterm::event::KeyCode::Backspace => ratatui::crossterm::event::KeyCode::Backspace,
+                            crossterm::event::KeyCode::Enter => ratatui::crossterm::event::KeyCode::Enter,
+                            crossterm::event::KeyCode::Left => ratatui::crossterm::event::KeyCode::Left,
+                            crossterm::event::KeyCode::Right => ratatui::crossterm::event::KeyCode::Right,
+                            crossterm::event::KeyCode::Up => ratatui::crossterm::event::KeyCode::Up,
+                            crossterm::event::KeyCode::Down => ratatui::crossterm::event::KeyCode::Down,
+                            crossterm::event::KeyCode::Home => ratatui::crossterm::event::KeyCode::Home,
+                            crossterm::event::KeyCode::End => ratatui::crossterm::event::KeyCode::End,
+                            crossterm::event::KeyCode::PageUp => ratatui::crossterm::event::KeyCode::PageUp,
+                            crossterm::event::KeyCode::PageDown => ratatui::crossterm::event::KeyCode::PageDown,
+                            crossterm::event::KeyCode::Tab => ratatui::crossterm::event::KeyCode::Tab,
+                            crossterm::event::KeyCode::BackTab => ratatui::crossterm::event::KeyCode::BackTab,
+                            crossterm::event::KeyCode::Delete => ratatui::crossterm::event::KeyCode::Delete,
+                            crossterm::event::KeyCode::Insert => ratatui::crossterm::event::KeyCode::Insert,
+                            crossterm::event::KeyCode::F(n) => ratatui::crossterm::event::KeyCode::F(n),
+                            crossterm::event::KeyCode::Null => ratatui::crossterm::event::KeyCode::Null,
+                            crossterm::event::KeyCode::CapsLock => ratatui::crossterm::event::KeyCode::CapsLock,
+                            crossterm::event::KeyCode::ScrollLock => ratatui::crossterm::event::KeyCode::ScrollLock,
+                            crossterm::event::KeyCode::NumLock => ratatui::crossterm::event::KeyCode::NumLock,
+                            crossterm::event::KeyCode::PrintScreen => ratatui::crossterm::event::KeyCode::PrintScreen,
+                            crossterm::event::KeyCode::Pause => ratatui::crossterm::event::KeyCode::Pause,
+                            crossterm::event::KeyCode::Menu => ratatui::crossterm::event::KeyCode::Menu,
+                            crossterm::event::KeyCode::KeypadBegin => ratatui::crossterm::event::KeyCode::KeypadBegin,
+                            crossterm::event::KeyCode::Esc => ratatui::crossterm::event::KeyCode::Esc,
+                            crossterm::event::KeyCode::Media(_) => return, // Skip media keys
+                            crossterm::event::KeyCode::Modifier(_) => return, // Skip modifier keys
+                        },
+                        modifiers: ratatui::crossterm::event::KeyModifiers::from_bits_retain(key.modifiers.bits()),
+                        kind: match key.kind {
+                            crossterm::event::KeyEventKind::Press => ratatui::crossterm::event::KeyEventKind::Press,
+                            crossterm::event::KeyEventKind::Repeat => ratatui::crossterm::event::KeyEventKind::Repeat,
+                            crossterm::event::KeyEventKind::Release => ratatui::crossterm::event::KeyEventKind::Release,
+                        },
+                        state: ratatui::crossterm::event::KeyEventState::NONE,
+                    };
+                    tx.send(Event::Key(ratatui_key)).unwrap();
                 }
                 _ => {
-                    // TODO
+                    // TODO: Handle mouse events and other events
                 }
             },
             Some(Err(err)) => {

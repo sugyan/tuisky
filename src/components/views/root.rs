@@ -181,7 +181,7 @@ impl ViewComponent for RootComponent {
         f.render_stateful_widget(
             List::new(items)
                 .block(Block::default().padding(Padding::uniform(1)))
-                .highlight_style(Style::default().reset().reversed()),
+                .highlight_style(Style::default().reversed()),
             area,
             &mut self.state,
         );

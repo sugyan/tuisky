@@ -1,6 +1,6 @@
 use crate::components::views::types::Action as ViewAction;
 use bsky_sdk::BskyAgent;
-use crossterm::event::{KeyEvent, MouseEvent};
+use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 use std::fmt::{Debug, Formatter, Result};
 
 pub type IdType = u32;
@@ -44,6 +44,7 @@ impl Debug for Action {
 pub enum Event {
     Tick(usize),
     Key(KeyEvent),
+    #[allow(dead_code)]
     Mouse(MouseEvent),
     Error(String),
 }

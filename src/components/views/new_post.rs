@@ -1,16 +1,16 @@
 use super::super::modals::types::{Action as ModalAction, Data, EmbedData};
 use super::super::modals::{EmbedModalComponent, ModalComponent};
 use super::ViewComponent;
-use super::types::{Action, Transition, View};
+use super::types::{Action, ReplyContext, Transition, View};
 use bsky_sdk::BskyAgent;
 use bsky_sdk::api::app::bsky::embed::{self, record_with_media};
-use bsky_sdk::api::app::bsky::feed::post::{RecordData, RecordEmbedRefs};
+use bsky_sdk::api::app::bsky::feed::post::{RecordData, RecordEmbedRefs, ReplyRefData};
 use bsky_sdk::api::com::atproto::repo::{create_record, strong_ref};
 use bsky_sdk::api::types::Union;
 use bsky_sdk::api::types::string::{Datetime, Language};
 use bsky_sdk::rich_text::RichText;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use futures_util::future;
 use image::{ImageFormat, ImageReader};
 use ratatui::layout::{Constraint, Layout};
@@ -60,6 +60,7 @@ pub struct NewPostViewComponent {
     agent: Arc<BskyAgent>,
     text: TextArea<'static>,
     embed: Option<EmbedData>,
+    reply: Option<ReplyContext>,
     langs: TextArea<'static>,
     focus: Focus,
     text_len: usize,
@@ -67,7 +68,11 @@ pub struct NewPostViewComponent {
 }
 
 impl NewPostViewComponent {
-    pub fn new(action_tx: UnboundedSender<Action>, agent: Arc<BskyAgent>) -> Self {
+    pub fn new(
+        action_tx: UnboundedSender<Action>,
+        agent: Arc<BskyAgent>,
+        reply: Option<ReplyContext>,
+    ) -> Self {
         let mut text = TextArea::default();
         text.set_block(Block::bordered().title("Text"));
         text.set_cursor_line_style(Style::default());
@@ -80,6 +85,7 @@ impl NewPostViewComponent {
             agent,
             text,
             embed: None,
+            reply,
             langs,
             focus: Focus::Text,
             text_len: 0,
@@ -104,7 +110,7 @@ impl NewPostViewComponent {
         if let Some(curr) = self.current_textarea() {
             curr.set_cursor_style(Style::default().reversed());
             if let Some(block) = curr.block() {
-                curr.set_block(block.clone().reset());
+                curr.set_block(block.clone().dim());
             }
         }
     }
@@ -113,6 +119,7 @@ impl NewPostViewComponent {
         let agent = self.agent.clone();
         let text = self.text.lines().join("\n");
         let embed_data = self.embed.clone();
+        let reply_context = self.reply.clone();
         let langs = Some(
             self.langs
                 .lines()
@@ -124,7 +131,8 @@ impl NewPostViewComponent {
         )
         .filter(|v| !v.is_empty());
         tokio::spawn(async move {
-            match Self::try_create_post_record(&agent, embed_data, langs, text).await {
+            match Self::try_create_post_record(&agent, embed_data, reply_context, langs, text).await
+            {
                 Ok(output) => {
                     log::info!("Post created: {output:?}");
                     if let Err(e) = tx.send(Action::Transition(Transition::Pop)) {
@@ -142,6 +150,7 @@ impl NewPostViewComponent {
     async fn try_create_post_record(
         agent: &BskyAgent,
         embed_data: Option<EmbedData>,
+        reply_context: Option<ReplyContext>,
         langs: Option<Vec<Language>>,
         text: String,
     ) -> Result<create_record::Output> {
@@ -221,6 +230,13 @@ impl NewPostViewComponent {
         } else {
             None
         };
+        let reply = reply_context.map(|ctx| {
+            ReplyRefData {
+                parent: ctx.parent,
+                root: ctx.root,
+            }
+            .into()
+        });
         Ok(agent
             .create_record(RecordData {
                 created_at: Datetime::now(),
@@ -229,7 +245,7 @@ impl NewPostViewComponent {
                 facets: rich_text.facets,
                 labels: None,
                 langs,
-                reply: None,
+                reply,
                 tags: None,
                 text: rich_text.text,
             })
@@ -239,7 +255,7 @@ impl NewPostViewComponent {
 
 impl ViewComponent for NewPostViewComponent {
     fn view(&self) -> View {
-        View::NewPost
+        View::NewPost(self.reply.clone())
     }
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
         if let Some(modal) = self.modals.as_mut() {
@@ -248,9 +264,19 @@ impl ViewComponent for NewPostViewComponent {
                 _ => None,
             });
         }
+        if matches!(key.code, KeyCode::Esc) {
+            return Ok(Some(Action::Back));
+        }
         let focus = self.focus;
         if let Some(textarea) = self.current_textarea() {
             if focus == Focus::Text {
+                if (key.code == KeyCode::Enter && (key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::ALT)))
+                    || (key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL))
+                    || (key.code == KeyCode::Char('j') && key.modifiers.contains(KeyModifiers::CONTROL))
+                    || (key.code == KeyCode::Char('m') && key.modifiers.contains(KeyModifiers::CONTROL))
+                {
+                    return Ok(Some(Action::Enter));
+                }
                 let cursor = textarea.cursor();
                 let result = textarea.input(key) || textarea.cursor() != cursor;
                 self.text_len = RichText::new(self.text.lines().join("\n"), None).grapheme_len();
@@ -340,7 +366,7 @@ impl ViewComponent for NewPostViewComponent {
                 )));
                 Ok(Some(Action::Render))
             }
-            Action::Enter if self.focus == Focus::Submit => {
+            Action::Enter if self.focus == Focus::Submit || self.focus == Focus::Text => {
                 self.focus = Focus::None;
                 self.create_post_record()?;
                 Ok(Some(Action::Render))
@@ -354,15 +380,26 @@ impl ViewComponent for NewPostViewComponent {
         }
     }
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        let [paragraph, text_len, text, embed, langs, submit] = Layout::vertical([
+        let title = if let Some(reply) = &self.reply {
+            format!("New post (Replying to @{})", reply.handle)
+        } else {
+            "New post".to_string()
+        };
+        let [paragraph, text_len, text, embed, langs, submit, hint] = Layout::vertical([
             Constraint::Length(2),
             Constraint::Length(1),
             Constraint::Length(8),
             Constraint::Length(1 + self.embed.is_some() as u16),
             Constraint::Length(3),
             Constraint::Length(1),
+            Constraint::Length(1),
         ])
         .areas(area);
+        // ...
+        f.render_widget(
+            Line::from(" Alt-Enter/Ctrl-s: Post | Esc: Back ").centered().gray(),
+            hint,
+        );
         let mut embed_lines = vec![Line::from("+ Embed")];
         if let Some(embed) = &self.embed {
             let mut line = Line::from(match (embed.record.is_some(), embed.images.len()) {
@@ -385,7 +422,7 @@ impl ViewComponent for NewPostViewComponent {
             submit_line = submit_line.reversed();
         }
         f.render_widget(
-            Paragraph::new("New post").bold().block(
+            Paragraph::new(title).bold().block(
                 Block::default()
                     .borders(Borders::BOTTOM)
                     .border_style(Color::Gray)

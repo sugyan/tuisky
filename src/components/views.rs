@@ -1,4 +1,5 @@
 mod feed;
+mod image_viewer;
 mod login;
 mod menu;
 mod new_post;
@@ -8,6 +9,7 @@ pub mod types;
 mod utils;
 
 pub use self::feed::FeedViewComponent;
+pub use self::image_viewer::ImageGalleryComponent;
 pub use self::login::LoginComponent;
 pub use self::menu::MenuViewComponent;
 pub use self::new_post::NewPostViewComponent;
@@ -15,7 +17,7 @@ pub use self::post::PostViewComponent;
 pub use self::root::RootComponent;
 use self::types::{Action, View};
 use color_eyre::Result;
-use crossterm::event::KeyEvent;
+use ratatui::crossterm::event::KeyEvent;
 use ratatui::{layout::Rect, Frame};
 
 pub trait ViewComponent {

@@ -1,4 +1,5 @@
 use crate::backend::types::{FeedSourceInfo, PinnedFeed};
+use crate::image::ImageData;
 use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPost, PostView, ViewerState};
 use bsky_sdk::api::app::bsky::feed::get_post_thread::OutputThreadRefs;
 use bsky_sdk::api::types::Union;
@@ -15,6 +16,7 @@ pub enum Action {
     Refresh,
     NewPost,
     Menu,
+    Delete,
     Login(Box<BskyAgent>),
     Logout,
     Update(Box<Data>),
@@ -32,6 +34,7 @@ impl Debug for Action {
             Action::Refresh => write!(f, "Refresh"),
             Action::NewPost => write!(f, "NewPost"),
             Action::Menu => write!(f, "Menu"),
+            Action::Delete => write!(f, "Delete"),
             Action::Login(_) => write!(f, "Login"),
             Action::Logout => write!(f, "Logout"),
             Action::Update(_) => write!(f, "Update"),
@@ -46,6 +49,9 @@ pub enum Data {
     Feed(Vec<FeedViewPost>),
     PostThread(Union<OutputThreadRefs>),
     ViewerState(Option<ViewerState>),
+    // Image viewer data
+    GalleryImageLoadedWithUrl(usize, ImageData, String),  // (index, data, url)
+    GalleryImageError(usize, String),
 }
 
 #[derive(Debug, Clone)]
@@ -56,10 +62,18 @@ pub enum Transition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyContext {
+    pub root: bsky_sdk::api::com::atproto::repo::strong_ref::Main,
+    pub parent: bsky_sdk::api::com::atproto::repo::strong_ref::Main,
+    pub handle: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum View {
     Login,
     Root,
-    NewPost,
+    NewPost(Option<ReplyContext>),
     Feed(Box<FeedSourceInfo>),
     Post(Box<(PostView, Option<PostView>)>),
+    ImageGallery(Vec<(String, Option<String>)>), // Vec<(image_url, alt_text)>
 }

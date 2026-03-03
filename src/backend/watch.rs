@@ -8,7 +8,8 @@ pub trait Watch {
 
     fn subscribe(&self) -> watch::Receiver<Self::Output>;
     fn unsubscribe(&self);
-    fn refresh(&self);
+    fn refresh(&self) {}
+    fn load_more(&self) {}
 }
 
 pub struct Watcher {

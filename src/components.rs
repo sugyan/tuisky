@@ -6,7 +6,7 @@ pub mod views;
 use crate::config::Config;
 use crate::types::{Action, Event};
 use color_eyre::eyre::Result;
-use crossterm::event::{KeyEvent, MouseEvent};
+use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::layout::{Rect, Size};
 use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;

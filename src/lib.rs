@@ -6,3 +6,6 @@ pub mod config;
 mod tui;
 mod types;
 pub mod utils;
+
+// Image rendering support
+pub mod image;

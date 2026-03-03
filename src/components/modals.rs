@@ -7,7 +7,7 @@ pub use self::embed::EmbedModalComponent;
 use self::types::Action;
 use super::views::types::Action as ViewsAction;
 use color_eyre::Result;
-use crossterm::event::KeyEvent;
+use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
