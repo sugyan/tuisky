@@ -17,7 +17,6 @@ use bsky_sdk::api::types::{TryFromUnknown, Union};
 use bsky_sdk::{BskyAgent, api};
 use chrono::Local;
 use color_eyre::Result;
-use indexmap::IndexSet;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
 use ratatui::style::{Color, Style, Stylize};
@@ -40,6 +39,7 @@ enum PostAction {
     Delete,
     Open(String),
     ViewRecord(Box<record::ViewRecord>),
+    ViewImages(Vec<(String, Option<String>)>), // (image_url, alt_text)
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -69,6 +69,10 @@ impl<'a> From<&'a PostAction> for ListItem<'a> {
                 Span::from("embedded record").yellow(),
                 Span::from(" "),
                 Span::from(view_record.uri.as_str()).underlined(),
+            ])),
+            PostAction::ViewImages(images) => Self::from(Line::from(vec![
+                Span::from("View "),
+                Span::from(format!("{} image(s)", images.len())).yellow(),
             ])),
         }
     }
@@ -144,19 +148,7 @@ impl PostViewComponent {
         if let Some(link) = Self::uri_to_web_url(&post_view.uri, &post_view.author.handle) {
             actions.push(PostAction::Open(link));
         }
-        let mut links = IndexSet::new();
-        if let Ok(record) = post::Record::try_from_unknown(post_view.record.clone()) {
-            if let Some(facets) = &record.facets {
-                for facet in facets {
-                    for feature in &facet.features {
-                        match feature {
-                            Union::Refs(MainFeaturesItem::Link(link)) => { links.insert(link.uri.clone()); }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
+        
         // Collect images for viewing
         let mut images_to_view: Vec<(String, Option<String>)> = Vec::new();
         
@@ -164,7 +156,6 @@ impl PostViewComponent {
             match embed {
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedImagesView(images)) => {
                     for image in &images.images {
-                        links.insert(image.fullsize.clone());
                         // 使用缩略图 URL 加快加载速度
                         // BlueSky CDN 支持：/feed_fullsize, /feed_thumbnail, /fullsize, /thumbnail
                         let thumb_url = if image.fullsize.contains("/feed_thumbnail") || image.fullsize.contains("/thumbnail") {
@@ -184,10 +175,12 @@ impl PostViewComponent {
                             Some(image.alt.clone()).filter(|s| !s.is_empty()),
                         ));
                     }
-                    // Removed: ViewImages action - images are now opened directly from feed
+                    if !images_to_view.is_empty() {
+                        actions.push(PostAction::ViewImages(images_to_view));
+                    }
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(external)) => {
-                    links.insert(external.external.uri.clone());
+                    // External links are handled by facets
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordView(record)) => {
                     actions.extend(Self::record_actions(record));
@@ -195,7 +188,24 @@ impl PostViewComponent {
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordWithMediaView(record_with_media)) => {
                     if let Union::Refs(bsky_sdk::api::app::bsky::embed::record_with_media::ViewMediaRefs::AppBskyEmbedImagesView(images)) = &record_with_media.media {
                         for image in &images.images {
-                            links.insert(image.fullsize.clone());
+                            // 使用缩略图 URL 加快加载速度
+                            let thumb_url = if image.fullsize.contains("/feed_thumbnail") || image.fullsize.contains("/thumbnail") {
+                                log::info!("Image already thumbnail: {}", image.fullsize);
+                                image.fullsize.clone()
+                            } else {
+                                let url = image.fullsize
+                                    .replace("/feed_fullsize", "/feed_thumbnail")
+                                    .replace("/fullsize", "/thumbnail");
+                                log::info!("Image URL: {} -> {}", image.fullsize, url);
+                                url
+                            };
+                            images_to_view.push((
+                                thumb_url,
+                                Some(image.alt.clone()).filter(|s| !s.is_empty()),
+                            ));
+                        }
+                        if !images_to_view.is_empty() {
+                            actions.push(PostAction::ViewImages(images_to_view));
                         }
                     }
                     actions.extend(Self::record_actions(&record_with_media.record));
@@ -203,7 +213,7 @@ impl PostViewComponent {
                 _ => {}
             }
         }
-        [actions, links.into_iter().map(PostAction::Open).collect::<Vec<_>>()].concat()
+        actions
     }
     fn record_actions(record: &record::View) -> Vec<PostAction> {
         let mut actions = Vec::new();
@@ -374,6 +384,14 @@ impl ViewComponent for PostViewComponent {
                                 let mut viewer = self.post_view.viewer.clone();
                                 let at_uri = uri.clone();
                                 tokio::spawn(async move { if agent.delete_record(at_uri).await.is_ok() { if let Some(v) = viewer.as_mut() { v.repost = None; } let _ = tx.send(Action::Update(Box::new(Data::ViewerState(viewer)))); } });
+                            }
+                            PostAction::ViewImages(images) => {
+                                // Open image gallery view
+                                return Ok(Some(Action::Transition(Transition::Push(Box::new(View::ImageGallery(images.clone()))))));
+                            }
+                            PostAction::Open(uri) => {
+                                // Open link in external browser
+                                let _ = open::that(uri.clone());
                             }
                             _ => {}
                         }
