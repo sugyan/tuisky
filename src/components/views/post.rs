@@ -158,9 +158,13 @@ impl PostViewComponent {
                     for feature in &facet.features {
                         match feature {
                             Union::Refs(MainFeaturesItem::Link(link)) => {
+                                log::info!("Facet link found: uri={}", link.uri);
                                 // Filter out image CDN links
                                 if !link.uri.starts_with("https://cdn.bsky.app/img/") {
+                                    log::info!("Adding link to actions: {}", link.uri);
                                     links.insert(link.uri.clone());
+                                } else {
+                                    log::info!("Filtering out image CDN link: {}", link.uri);
                                 }
                             }
                             _ => {}
@@ -201,7 +205,11 @@ impl PostViewComponent {
                     }
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedExternalView(external)) => {
-                    // External links are handled by facets
+                    // Add external link from embed
+                    log::info!("External embed link: {}", external.external.uri);
+                    if !external.external.uri.starts_with("https://cdn.bsky.app/img/") {
+                        links.insert(external.external.uri.clone());
+                    }
                 }
                 Union::Refs(PostViewEmbedRefs::AppBskyEmbedRecordView(record)) => {
                     actions.extend(Self::record_actions(record));
